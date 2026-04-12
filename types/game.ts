@@ -1,0 +1,83 @@
+export type Hunt = {
+  id: number;
+  title: string;
+  description: string | null;
+  city: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PlayerProfile = {
+  id: number;
+  email: string;
+  username: string;
+  city: string | null;
+  avatarUrl: string | null;
+  totalPoints: number;
+  completedHunts: number;
+  loginStreak: number;
+  level: string;
+  lastActivityAt: string | null;
+};
+
+export type UserRank = {
+  rank: number;
+  total: number;
+  percentile: number;
+};
+
+export type LeaderboardEntry = {
+  id: number;
+  username: string;
+  city: string | null;
+  level: string;
+  totalPoints: number;
+  completedHunts: number;
+  loginStreak: number;
+  rank?: number;
+};
+
+export type LeaderboardStats = {
+  totalPlayers: number;
+  totalPoints: number;
+  totalCompletedHunts: number;
+  averagePoints: number;
+};
+
+export type AchievementType =
+  | 'hunts_completed'
+  | 'steps_completed'
+  | 'login_streak'
+  | 'first_hunt'
+  | 'top_leaderboard'
+  | 'social';
+
+export type Achievement = {
+  id: number;
+  name: string;
+  description: string;
+  iconUrl: string | null;
+  pointsReward: number;
+  type: AchievementType;
+  threshold: number;
+  createdAt: string;
+};
+
+export type HuntReview = {
+  id: number;
+  rating: number;
+  comment: string;
+  status?: string;
+  createdAt: string;
+  user: {
+    id: number;
+    username: string;
+  } | null;
+};
+
+export type HuntReviewStats = {
+  averageRating: number;
+  totalReviews: number;
+  distribution: Record<string, number>;
+};
