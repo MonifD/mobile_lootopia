@@ -1,98 +1,104 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useCallback } from 'react';
+import { Button, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { useApiResource } from '@/hooks/use-api-resource';
+import { lootopiaApi } from '@/services/lootopia-api';
+import type { Hunt } from '@/types/game';
 
-export default function HomeScreen() {
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('fr-FR');
+}
+
+export default function HuntsScreen() {
+  const router = useRouter();
+  const loadHunts = useCallback(() => lootopiaApi.getHunts(), []);
+  const { data, error, loading, refresh } = useApiResource(loadHunts);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ThemedView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <ThemedText type="title">Chasses</ThemedText>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        {loading ? <ThemedText>Chargement...</ThemedText> : null}
+        {error ? <ThemedText>Erreur: {error}</ThemedText> : null}
+
+        {data?.length ? (
+          data.map((hunt: Hunt) => (
+            <Pressable
+              key={hunt.id}
+              onPress={() => router.push(`/hunts/${hunt.id}`)}
+              style={[
+                styles.card,
+                {
+                  borderColor: hunt.isActive ? '#34d399' : '#9ca3af',
+                  opacity: hunt.isActive ? 1 : 0.6,
+                },
+              ]}
+            >
+              <ThemedText type="defaultSemiBold">{hunt.title}</ThemedText>
+              {hunt.description ? <ThemedText style={styles.description}>{hunt.description}</ThemedText> : null}
+              <View style={styles.footer}>
+                {hunt.city ? <ThemedText style={styles.meta}>Lieu: {hunt.city}</ThemedText> : null}
+                <ThemedText style={styles.meta}>Cree: {formatDate(hunt.createdAt)}</ThemedText>
+              </View>
+              <ThemedText style={styles.badge}>{hunt.isActive ? 'Active' : 'Inactive'}</ThemedText>
+              <ThemedText style={styles.openHint}>Ouvrir le detail</ThemedText>
+            </Pressable>
+          ))
+        ) : (
+          <ThemedText>Aucune chasse disponible pour le moment.</ThemedText>
+        )}
+
+        <Button title="Rafraichir" onPress={() => void refresh()} />
+      </ScrollView>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+  },
+  content: {
+    gap: 12,
+    padding: 16,
+  },
+  card: {
+    borderRadius: 12,
+    borderWidth: 2,
+    gap: 8,
+    padding: 12,
+  },
+  description: {
+    fontSize: 13,
+    opacity: 0.8,
+  },
+  footer: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  meta: {
+    fontSize: 12,
+    opacity: 0.6,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  badge: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    alignSelf: 'flex-start',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+    backgroundColor: '#34d399',
+    color: '#fff',
+    overflow: 'hidden',
+  },
+  openHint: {
+    fontSize: 12,
+    opacity: 0.65,
   },
 });

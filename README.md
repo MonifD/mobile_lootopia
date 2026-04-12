@@ -1,51 +1,58 @@
-# Welcome to your Expo app 👋
+# lootopia_mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Frontend mobile React Native (Expo) pour le jeu Lootopia.
 
-## Get started
+- Backend: `../lootopia` (projet separe)
+- Frontend mobile: `./mobile_lootopia`
 
-1. Install dependencies
+## Architecture
 
-   ```bash
-   npm install
-   ```
+- **Auth**: Contexte global `AuthProvider` avec SecureStore + Bearer token
+- **Ecrans de jeu**: 3 tabs Expo Router (Chasses, Accomplissements, Profil)
+- **API**: Client centralisé avec support ApiPlatform (hydra:member) et erreurs Symfony
 
-2. Start the app
+## Ecrans inclus
 
-   ```bash
-   npx expo start
-   ```
+### Auth
+- `Login` (`app/(auth)/login.tsx`)
+- `Register` (`app/(auth)/register.tsx`)
 
-In the output, you'll find options to open the app in a
+### Jeu (connecte)
+- `Chasses` (`app/(tabs)/index.tsx`) - Liste des hunts disponibles
+- `Accomplissements` (`app/(tabs)/explore.tsx`) - Achievements avec rarete coloree
+- `Profil` (`app/(tabs)/profile.tsx`) - Profil joueur + stats + deconnexion
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Configuration backend
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+1. Copier `.env.example` vers `.env`
+2. Ajuster `EXPO_PUBLIC_API_URL`
 
-## Get a fresh project
+Exemples:
 
-When you're ready, run:
+- Android Emulator: `http://10.0.2.2:8000/api`
+- iOS Simulator: `http://localhost:8000/api`
+- Telephone physique: `http://<IP_DE_TON_PC>:8000/api`
+
+## Lancer le projet
 
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Endpoints backend utilises
 
-## Learn more
+### Auth
+- `POST /login` - Connexion (email + password) -> token + profil
+- `POST /users` - Inscription (email + username + password + city) -> profil
 
-To learn more about developing your project with Expo, look at the following resources:
+### Jeu authentifie (Bearer token)
+- `GET /hunts` -> Hunt[] (chasses disponibles)
+- `GET /users/{id}` -> PlayerProfile (profil complet)
+- `GET /users/{id}/achievements` -> Achievement[] (accomplissements du joueur)
+- `GET /leaderboard/my-rank` -> UserRank (rang + percentile)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-# lootopia_mobile
+### Supports de reponse
+- Format direct: `T[]` ou `T`
+- Format ApiPlatform: `{ 'hydra:member': T[], ...}`
+- Format envelope: `{ data: T }`

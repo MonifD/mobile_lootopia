@@ -1,112 +1,102 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useCallback } from 'react';
+import { Button, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+import { useApiResource } from '@/hooks/use-api-resource';
+import { useAuth } from '@/providers/auth-provider';
+import { lootopiaApi } from '@/services/lootopia-api';
+import type { Achievement } from '@/types/game';
 
-export default function TabTwoScreen() {
+function getRarityColor(achievementType: string): string {
+  switch (achievementType) {
+    case 'top_leaderboard':
+      return '#fbbf24';
+    case 'login_streak':
+      return '#a78bfa';
+    case 'hunts_completed':
+      return '#fb923c';
+    case 'steps_completed':
+      return '#34d399';
+    case 'social':
+      return '#60a5fa';
+    default:
+      return '#d1d5db';
+  }
+}
+
+export default function AchievementsScreen() {
+  const { session } = useAuth();
+  const loadAchievements = useCallback(() => {
+    if (!session?.userId) return Promise.resolve([]);
+    return lootopiaApi.getAchievementsForUser(session.userId);
+  }, [session?.userId]);
+
+  const { data, error, loading, refresh } = useApiResource(loadAchievements);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <ThemedView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <ThemedText type="title">Accomplissements</ThemedText>
+
+        {loading ? <ThemedText>Chargement...</ThemedText> : null}
+        {error ? <ThemedText>Erreur: {error}</ThemedText> : null}
+
+        {data?.length ? (
+          data.map((achievement: Achievement) => (
+            <View key={achievement.id} style={[styles.card, { borderColor: getRarityColor(achievement.type) }]}>
+              <View style={styles.header}>
+                <ThemedText type="defaultSemiBold">{achievement.name}</ThemedText>
+                <ThemedText style={styles.points}>{achievement.pointsReward} pts</ThemedText>
+              </View>
+              <ThemedText style={styles.description}>{achievement.description}</ThemedText>
+              {achievement.threshold > 1 ? (
+                <ThemedText style={styles.threshold}>Seuil: {achievement.threshold}</ThemedText>
+              ) : null}
+            </View>
+          ))
+        ) : (
+          <ThemedText>Aucun accomplissement deverrouille pour le moment.</ThemedText>
+        )}
+
+        <Button title="Rafraichir" onPress={() => void refresh()} />
+      </ScrollView>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
   },
-  titleContainer: {
-    flexDirection: 'row',
+  content: {
+    gap: 12,
+    padding: 16,
+  },
+  card: {
+    borderRadius: 12,
+    borderWidth: 2,
     gap: 8,
+    padding: 12,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  points: {
+    fontWeight: 'bold',
+    fontSize: 14,
+    color: '#fbbf24',
+  },
+  description: {
+    fontSize: 13,
+    opacity: 0.8,
+    lineHeight: 18,
+  },
+  threshold: {
+    fontSize: 12,
+    opacity: 0.6,
+    fontStyle: 'italic',
   },
 });
