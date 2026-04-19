@@ -40,6 +40,20 @@ npm install
 npx expo start
 ```
 
+## Bypass auth (dev)
+
+Pour afficher directement la page d'accueil (tabs) sans login:
+
+1. Ajouter dans `.env`:
+	`EXPO_PUBLIC_BYPASS_AUTH=true`
+2. Relancer Expo avec cache vide:
+	`npx expo start -c`
+
+Pour revenir au comportement normal (ecran de connexion):
+
+- supprimer la variable
+- ou mettre `EXPO_PUBLIC_BYPASS_AUTH=false`
+
 ## Endpoints backend utilises
 
 ### Auth

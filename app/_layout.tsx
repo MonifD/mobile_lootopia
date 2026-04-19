@@ -6,6 +6,8 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/providers/auth-provider';
 
+const BYPASS_AUTH = process.env.EXPO_PUBLIC_BYPASS_AUTH === 'true';
+
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { isLoading, session } = useAuth();
@@ -14,11 +16,12 @@ function RootLayoutNav() {
     return null;
   }
 
-  const isSignedIn = !!session;
+  const isSignedIn = BYPASS_AUTH || !!session;
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         {isSignedIn ? (
           <>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

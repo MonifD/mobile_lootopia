@@ -13,6 +13,7 @@ import type {
 const FALLBACK_API_URL = 'http://10.0.2.2:8080/api';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? FALLBACK_API_URL;
+const LOGIN_PATH = process.env.EXPO_PUBLIC_LOGIN_PATH ?? '/api_login';
 
 let bearerToken: string | null = null;
 
@@ -28,6 +29,16 @@ type HydraCollection<T> = {
 };
 
 type PrimitiveRecord = Record<string, unknown>;
+
+class ApiRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+    this.name = 'ApiRequestError';
+  }
+}
 
 function buildUrl(path: string): string {
   return `${API_BASE_URL.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
@@ -144,16 +155,25 @@ export function setAuthToken(token: string | null) {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(buildUrl(path), {
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
-      ...(init?.headers ?? {}),
-    },
-    credentials: 'include',
-    ...init,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(buildUrl(path), {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+        ...(init?.headers ?? {}),
+      },
+      ...init,
+    });
+  } catch {
+    const apiUrl = API_BASE_URL.replace(/\/$/, '');
+    const localhostHint = apiUrl.includes('localhost')
+      ? ' Sur un telephone reel, remplace localhost par l\'IP locale de ton Mac (ex: http://192.168.x.x:8080/api).'
+      : '';
+    throw new Error(`Impossible de joindre l'API (${apiUrl}).${localhostHint}`);
+  }
 
   const text = await response.text();
   const parsed = parseJsonSafe(text);
@@ -165,10 +185,41 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       (parsed as ApiErrorPayload | null)?.detail ??
       (parsed as ApiErrorPayload | null)?.['hydra:description'] ??
       `HTTP ${response.status}`;
-    throw new Error(message);
+    throw new ApiRequestError(message, response.status);
   }
 
   return unwrapData<T>(parsed);
+}
+
+async function loginWithFallback(payload: LoginPayload): Promise<LoginResponse> {
+  const fallbackPath = '/login';
+  const paths = Array.from(new Set([LOGIN_PATH, fallbackPath]));
+  const loginPayload = { email: payload.email, password: payload.password };
+
+  let lastError: unknown = null;
+
+  for (const path of paths) {
+    try {
+      return await request<LoginResponse>(path, {
+        method: 'POST',
+        body: JSON.stringify(loginPayload),
+      });
+    } catch (error) {
+      lastError = error;
+
+      if (!(error instanceof ApiRequestError)) {
+        throw error;
+      }
+
+      if (error.status === 404) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Login failed');
 }
 
 export const lootopiaApi = {
@@ -178,11 +229,7 @@ export const lootopiaApi = {
       body: JSON.stringify(payload),
     }),
 
-  login: (payload: LoginPayload) =>
-    request<LoginResponse>('/login', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  login: (payload: LoginPayload) => loginWithFallback(payload),
 
   getUser: (userId: number) => request<PlayerProfile>(`/users/${userId}`),
 

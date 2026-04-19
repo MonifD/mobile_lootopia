@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { AuthSession } from '@/types/auth';
@@ -6,17 +7,31 @@ import { createSessionFromLogin, lootopiaApi, setAuthToken } from '@/services/lo
 
 const SESSION_KEY = 'lootopia.mobile.session';
 
+function isWebPlatform() {
+  return Platform.OS === 'web';
+}
+
 type AuthContextValue = {
   isLoading: boolean;
   session: AuthSession | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, username: string, password: string, city?: string) => Promise<void>;
+  signUp: (email: string, username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function saveSession(session: AuthSession | null) {
+  if (isWebPlatform()) {
+    if (!session) {
+      window.localStorage.removeItem(SESSION_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    return;
+  }
+
   if (!session) {
     await SecureStore.deleteItemAsync(SESSION_KEY);
     return;
@@ -32,6 +47,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function loadSession() {
       try {
+        if (isWebPlatform()) {
+          const raw = window.localStorage.getItem(SESSION_KEY);
+
+          if (!raw) {
+            setSession(null);
+            setAuthToken(null);
+            return;
+          }
+
+          const parsed = JSON.parse(raw) as AuthSession;
+          setSession(parsed);
+          setAuthToken(parsed.authToken);
+          return;
+        }
+
         const raw = await SecureStore.getItemAsync(SESSION_KEY);
         if (!raw) {
           setSession(null);
@@ -64,8 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await saveSession(nextSession);
         setSession(nextSession);
       },
-      signUp: async (email: string, username: string, password: string, city?: string) => {
-        await lootopiaApi.register({ email, username, password, city });
+      signUp: async (email: string, username: string, password: string) => {
+        await lootopiaApi.register({ email, username, password });
         const login = await lootopiaApi.login({ email, password });
         const nextSession = createSessionFromLogin(login);
         setAuthToken(nextSession.authToken);
