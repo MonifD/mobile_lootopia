@@ -9,11 +9,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/providers/auth-provider';
 
 export default function LoginScreen() {
+  const router = useRouter();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,6 +26,7 @@ export default function LoginScreen() {
       setError(null);
       setIsLoading(true);
       await signIn(email, password);
+      router.replace('/(tabs)');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);
@@ -43,11 +45,11 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
-            <ThemedText style={styles.badge}>Lootopia Partner</ThemedText>
+            <ThemedText style={styles.badge}>Lootopia Explorer</ThemedText>
             <ThemedText type="title" style={styles.title}>
               Connexion
             </ThemedText>
-            <ThemedText style={styles.subtitle}>Accedez au backoffice pour gerer vos chasses au tresor.</ThemedText>
+            <ThemedText style={styles.subtitle}>Connecte-toi pour reprendre ta chasse au tresor.</ThemedText>
 
             {error ? (
               <View style={styles.errorBox}>
@@ -87,6 +89,7 @@ export default function LoginScreen() {
                 styles.submitButton,
                 isLoading && styles.submitButtonDisabled,
                 pressed && !isLoading && styles.submitButtonPressed,
+                pressed && !isLoading && styles.buttonLift,
               ]}
               onPress={handleLogin}
               disabled={isLoading}>
@@ -103,8 +106,18 @@ export default function LoginScreen() {
             <View style={styles.footerRow}>
               <ThemedText style={styles.footerText}>Pas de compte ?</ThemedText>
               <Link href="/register" asChild>
-                <Pressable style={({ pressed }) => [styles.linkButton, pressed && styles.linkButtonPressed]}>
+                <Pressable style={({ pressed }) => [styles.linkButton, pressed && styles.linkButtonPressed, pressed && styles.buttonLift]}>
                   <ThemedText style={styles.linkText}>Creer un compte</ThemedText>
+                </Pressable>
+              </Link>
+            </View>
+
+            <View style={styles.guestCard}>
+              <ThemedText style={styles.guestTitle}>Tu veux juste explorer ?</ThemedText>
+              <ThemedText style={styles.guestText}>Va sur l'accueil public, regarde l'univers, puis reviens te connecter quand tu veux jouer.</ThemedText>
+              <Link href="/welcome" asChild>
+                <Pressable style={({ pressed }) => [styles.guestButton, pressed && styles.buttonLift]}>
+                  <ThemedText style={styles.guestButtonText}>Voir l'accueil</ThemedText>
                 </Pressable>
               </Link>
             </View>
@@ -118,7 +131,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#0b1220',
     overflow: 'hidden',
   },
   glowOrb: {
@@ -155,7 +168,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(255,255,255,0.96)',
+    backgroundColor: 'rgba(30,41,59,0.88)',
     padding: 24,
     shadowColor: '#0f172a',
     shadowOpacity: 0.5,
@@ -172,16 +185,16 @@ const styles = StyleSheet.create({
     letterSpacing: 1.3,
   },
   title: {
-    color: '#0f172a',
+    color: '#f8fafc',
     marginBottom: 6,
     fontSize: 32,
     fontWeight: '700',
   },
   subtitle: {
-    color: '#475569',
+    color: '#ffffff',
     marginBottom: 18,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 17,
   },
   errorBox: {
     marginBottom: 14,
@@ -201,18 +214,18 @@ const styles = StyleSheet.create({
   },
   label: {
     marginBottom: 6,
-    color: '#334155',
+    color: '#ffffff',
     fontSize: 13,
     fontWeight: '600',
   },
   input: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#ffffff',
+    borderColor: 'rgba(148,163,184,0.45)',
+    backgroundColor: 'rgba(30,41,59,0.78)',
     paddingHorizontal: 12,
     paddingVertical: 11,
-    color: '#0f172a',
+    color: '#f8fafc',
     fontSize: 16,
   },
   submitButton: {
@@ -225,6 +238,9 @@ const styles = StyleSheet.create({
   },
   submitButtonPressed: {
     backgroundColor: '#10b981',
+  },
+  buttonLift: {
+    transform: [{ scale: 0.98 }],
   },
   submitButtonDisabled: {
     opacity: 0.75,
@@ -248,8 +264,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   footerText: {
-    color: '#64748b',
-    fontSize: 13,
+    color: '#ffffff',
+    fontSize: 12,
   },
   linkButton: {
     paddingVertical: 2,
@@ -259,7 +275,41 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   linkText: {
-    color: '#047857',
+    color: '#34d399',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  guestCard: {
+    marginTop: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.24)',
+    backgroundColor: 'rgba(15,23,42,0.72)',
+    padding: 16,
+    gap: 8,
+  },
+  guestTitle: {
+    color: '#f8fafc',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  guestText: {
+    color: '#ffffff',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  guestButton: {
+    marginTop: 4,
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(96,165,250,0.45)',
+    backgroundColor: 'rgba(59,130,246,0.18)',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  guestButtonText: {
+    color: '#bfdbfe',
     fontSize: 13,
     fontWeight: '700',
   },

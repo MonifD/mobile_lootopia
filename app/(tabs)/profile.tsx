@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { Button, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -25,33 +26,50 @@ function getLevelColor(level: string): string {
 }
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { session, signOut } = useAuth();
 
   const loadProfile = useCallback(() => {
-    if (!session?.userId) return Promise.resolve(null as any);
-    return lootopiaApi.getUser(session.userId);
-  }, [session?.userId]);
+    const request = !session?.userId
+      ? lootopiaApi.getCurrentUser()
+      : lootopiaApi.getUser(session.userId);
+
+    return request.catch((error) => {
+      const message = error instanceof Error ? error.message : '';
+      if (/not found|EntityValueResolver/i.test(message)) {
+        void signOut();
+        router.replace('/login');
+      }
+
+      throw error;
+    });
+  }, [router, session?.userId, signOut]);
 
   const { data: profile, error, loading, refresh } = useApiResource(loadProfile);
 
   const handleLogout = async () => {
     await signOut();
+    router.replace('/login');
   };
 
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <ThemedText type="title">Profil</ThemedText>
+        <View style={styles.heroCard}>
+          <ThemedText style={styles.kicker}>Compte joueur</ThemedText>
+          <ThemedText type="title" style={styles.title}>Profil</ThemedText>
+          <ThemedText style={styles.subtitle}>Retrouve tes stats, ton niveau et ta progression globale.</ThemedText>
+        </View>
 
-        {loading ? <ThemedText>Chargement...</ThemedText> : null}
-        {error ? <ThemedText>Erreur: {error}</ThemedText> : null}
+        {loading ? <ThemedText style={styles.feedback}>Chargement...</ThemedText> : null}
+        {error ? <ThemedText style={styles.error}>Erreur: {error}</ThemedText> : null}
 
         {profile ? (
           <>
             <View style={styles.card}>
               <View style={styles.header}>
                 <View>
-                  <ThemedText type="defaultSemiBold">{profile.username}</ThemedText>
+                  <ThemedText type="defaultSemiBold" style={styles.name}>{profile.username}</ThemedText>
                   <ThemedText style={styles.email}>{profile.email}</ThemedText>
                 </View>
                 <View style={[styles.levelBadge, { backgroundColor: getLevelColor(profile.level) }]}>
@@ -77,20 +95,24 @@ export default function ProfileScreen() {
 
             {profile.city && (
               <View style={styles.card}>
-                <ThemedText type="defaultSemiBold">Ville</ThemedText>
-                <ThemedText>{profile.city}</ThemedText>
+                <ThemedText type="defaultSemiBold" style={styles.sectionLabel}>Ville</ThemedText>
+                <ThemedText style={styles.sectionValue}>{profile.city}</ThemedText>
               </View>
             )}
 
             {profile.lastActivityAt && (
               <View style={styles.card}>
-                <ThemedText type="defaultSemiBold">Derniere activite</ThemedText>
-                <ThemedText>{new Date(profile.lastActivityAt).toLocaleDateString('fr-FR')}</ThemedText>
+                <ThemedText type="defaultSemiBold" style={styles.sectionLabel}>Derniere activite</ThemedText>
+                <ThemedText style={styles.sectionValue}>{new Date(profile.lastActivityAt).toLocaleDateString('fr-FR')}</ThemedText>
               </View>
             )}
 
-            <Button title="Rafraichir" onPress={() => void refresh()} />
-            <Button title="Se deconnecter" onPress={handleLogout} color="#ef4444" />
+            <Pressable style={styles.refreshButton} onPress={() => void refresh()}>
+              <ThemedText style={styles.buttonText}>Rafraichir</ThemedText>
+            </Pressable>
+            <Pressable style={styles.logoutButton} onPress={handleLogout}>
+              <ThemedText style={styles.buttonText}>Se deconnecter</ThemedText>
+            </Pressable>
           </>
         ) : null}
       </ScrollView>
@@ -101,15 +123,49 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0b1220',
   },
   content: {
     gap: 12,
     padding: 16,
+    paddingBottom: 28,
+  },
+  heroCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(30,41,59,0.86)',
+    padding: 16,
+    gap: 6,
+  },
+  kicker: {
+    color: '#34d399',
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  title: {
+    color: '#f8fafc',
+  },
+  subtitle: {
+    color: '#ffffff',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  feedback: {
+    color: '#ffffff',
+    fontSize: 13,
+  },
+  error: {
+    color: '#fda4af',
+    fontSize: 13,
   },
   card: {
-    borderColor: '#4f46e5',
-    borderRadius: 12,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 14,
     borderWidth: 1,
+    backgroundColor: 'rgba(30,41,59,0.82)',
     gap: 8,
     padding: 12,
   },
@@ -118,17 +174,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  name: {
+    color: '#f8fafc',
+  },
   email: {
     fontSize: 13,
-    opacity: 0.7,
+    color: '#ffffff',
   },
   levelBadge: {
-    borderRadius: 8,
+    borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   levelText: {
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#fff',
     fontSize: 12,
   },
@@ -138,20 +197,44 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
     borderWidth: 1,
+    backgroundColor: 'rgba(30,41,59,0.82)',
     padding: 12,
     alignItems: 'center',
     gap: 4,
   },
   statValue: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    color: '#f8fafc',
   },
   statLabel: {
     fontSize: 12,
-    opacity: 0.7,
+    color: '#ffffff',
+  },
+  sectionLabel: {
+    color: '#ffffff',
+  },
+  sectionValue: {
+    color: '#f8fafc',
+  },
+  refreshButton: {
+    borderRadius: 12,
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  logoutButton: {
+    borderRadius: 12,
+    backgroundColor: '#be123c',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: '700',
   },
 });
 

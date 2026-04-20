@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { Button, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -26,27 +27,43 @@ function getRarityColor(achievementType: string): string {
 }
 
 export default function AchievementsScreen() {
-  const { session } = useAuth();
+  const router = useRouter();
+  const { session, signOut } = useAuth();
   const loadAchievements = useCallback(() => {
-    if (!session?.userId) return Promise.resolve([]);
-    return lootopiaApi.getAchievementsForUser(session.userId);
-  }, [session?.userId]);
+    const request = !session?.userId
+      ? lootopiaApi.getAchievementsForCurrentUser()
+      : lootopiaApi.getAchievementsForUser(session.userId);
+
+    return request.catch((error) => {
+      const message = error instanceof Error ? error.message : '';
+      if (/not found|EntityValueResolver/i.test(message)) {
+        void signOut();
+        router.replace('/login');
+      }
+
+      throw error;
+    });
+  }, [router, session?.userId, signOut]);
 
   const { data, error, loading, refresh } = useApiResource(loadAchievements);
 
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <ThemedText type="title">Accomplissements</ThemedText>
+        <View style={styles.heroCard}>
+          <ThemedText style={styles.kicker}>Progression joueur</ThemedText>
+          <ThemedText type="title" style={styles.title}>Accomplissements</ThemedText>
+          <ThemedText style={styles.subtitle}>Debloque des badges et monte en puissance a chaque mission.</ThemedText>
+        </View>
 
-        {loading ? <ThemedText>Chargement...</ThemedText> : null}
-        {error ? <ThemedText>Erreur: {error}</ThemedText> : null}
+        {loading ? <ThemedText style={styles.feedback}>Chargement...</ThemedText> : null}
+        {error ? <ThemedText style={styles.error}>Erreur: {error}</ThemedText> : null}
 
         {data?.length ? (
           data.map((achievement: Achievement) => (
             <View key={achievement.id} style={[styles.card, { borderColor: getRarityColor(achievement.type) }]}>
               <View style={styles.header}>
-                <ThemedText type="defaultSemiBold">{achievement.name}</ThemedText>
+                <ThemedText type="defaultSemiBold" style={styles.cardTitle}>{achievement.name}</ThemedText>
                 <ThemedText style={styles.points}>{achievement.pointsReward} pts</ThemedText>
               </View>
               <ThemedText style={styles.description}>{achievement.description}</ThemedText>
@@ -56,10 +73,14 @@ export default function AchievementsScreen() {
             </View>
           ))
         ) : (
-          <ThemedText>Aucun accomplissement deverrouille pour le moment.</ThemedText>
+          <View style={styles.emptyCard}>
+            <ThemedText style={styles.feedback}>Aucun accomplissement deverrouille pour le moment.</ThemedText>
+          </View>
         )}
 
-        <Button title="Rafraichir" onPress={() => void refresh()} />
+        <Pressable style={styles.refreshButton} onPress={() => void refresh()}>
+          <ThemedText style={styles.refreshText}>Rafraichir</ThemedText>
+        </Pressable>
       </ScrollView>
     </ThemedView>
   );
@@ -68,14 +89,48 @@ export default function AchievementsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0b1220',
   },
   content: {
     gap: 12,
     padding: 16,
+    paddingBottom: 28,
+  },
+  heroCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(30,41,59,0.86)',
+    padding: 16,
+    gap: 6,
+  },
+  kicker: {
+    color: '#34d399',
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  title: {
+    color: '#f8fafc',
+  },
+  subtitle: {
+    color: '#ffffff',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  feedback: {
+    color: '#ffffff',
+    fontSize: 13,
+  },
+  error: {
+    color: '#fda4af',
+    fontSize: 13,
   },
   card: {
-    borderRadius: 12,
-    borderWidth: 2,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: 'rgba(30,41,59,0.82)',
     gap: 8,
     padding: 12,
   },
@@ -84,19 +139,41 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  cardTitle: {
+    color: '#f8fafc',
+    flex: 1,
+    marginRight: 10,
+  },
   points: {
-    fontWeight: 'bold',
+    fontWeight: '700',
     fontSize: 14,
     color: '#fbbf24',
   },
   description: {
     fontSize: 13,
-    opacity: 0.8,
+    color: '#ffffff',
     lineHeight: 18,
   },
   threshold: {
     fontSize: 12,
-    opacity: 0.6,
+    color: '#ffffff',
     fontStyle: 'italic',
+  },
+  emptyCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.2)',
+    backgroundColor: 'rgba(30,41,59,0.65)',
+    padding: 14,
+  },
+  refreshButton: {
+    borderRadius: 12,
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  refreshText: {
+    color: '#fff',
+    fontWeight: '700',
   },
 });

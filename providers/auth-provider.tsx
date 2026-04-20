@@ -46,6 +46,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function loadSession() {
+      const isStaleSession = (candidate: AuthSession) => Boolean(candidate.authToken) && !candidate.userId;
+
       try {
         if (isWebPlatform()) {
           const raw = window.localStorage.getItem(SESSION_KEY);
@@ -57,6 +59,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
 
           const parsed = JSON.parse(raw) as AuthSession;
+          if (isStaleSession(parsed)) {
+            setSession(null);
+            setAuthToken(null);
+            await saveSession(null);
+            return;
+          }
+
           setSession(parsed);
           setAuthToken(parsed.authToken);
           return;
@@ -70,6 +79,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         const parsed = JSON.parse(raw) as AuthSession;
+        if (isStaleSession(parsed)) {
+          setSession(null);
+          setAuthToken(null);
+          await saveSession(null);
+          return;
+        }
+
         setSession(parsed);
         setAuthToken(parsed.authToken);
       } catch {
@@ -89,23 +105,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       signIn: async (email: string, password: string) => {
         const login = await lootopiaApi.login({ email, password });
-        const nextSession = createSessionFromLogin(login);
+        const nextSession = createSessionFromLogin(login, { email });
         setAuthToken(nextSession.authToken);
         await saveSession(nextSession);
         setSession(nextSession);
       },
       signUp: async (email: string, username: string, password: string) => {
         await lootopiaApi.register({ email, username, password });
-        const login = await lootopiaApi.login({ email, password });
-        const nextSession = createSessionFromLogin(login);
-        setAuthToken(nextSession.authToken);
-        await saveSession(nextSession);
-        setSession(nextSession);
-      },
-      signOut: async () => {
         setAuthToken(null);
         await saveSession(null);
         setSession(null);
+      },
+      signOut: async () => {
+        setAuthToken(null);
+        setSession(null);
+        try {
+          await saveSession(null);
+        } catch {
+          // La session en memoire est deja videe; on evite de bloquer la deconnexion.
+        }
       },
     };
   }, [isLoading, session]);

@@ -43,7 +43,11 @@ export default function LeaderboardScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <ThemedText type="title">Classement</ThemedText>
+        <View style={styles.heroCard}>
+          <ThemedText style={styles.kicker}>Competition</ThemedText>
+          <ThemedText type="title" style={styles.title}>Classement</ThemedText>
+          <ThemedText style={styles.subtitle}>Compare tes points et grimpe dans le top des chasseurs.</ThemedText>
+        </View>
 
         <View style={styles.filters}>
           {LEADERBOARD_MODES.map((item) => {
@@ -75,8 +79,8 @@ export default function LeaderboardScreen() {
           </View>
         </View>
 
-        {entriesState.loading ? <ActivityIndicator /> : null}
-        {entriesState.error ? <ThemedText>Erreur: {entriesState.error}</ThemedText> : null}
+        {entriesState.loading ? <ActivityIndicator color="#34d399" /> : null}
+        {entriesState.error ? <ThemedText style={styles.error}>Erreur: {entriesState.error}</ThemedText> : null}
 
         <View style={styles.podium}>
           {topThree.map((entry, index) => (
@@ -111,10 +115,39 @@ export default function LeaderboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0b1220',
   },
   content: {
     gap: 12,
     padding: 16,
+    paddingBottom: 28,
+  },
+  heroCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(30,41,59,0.86)',
+    padding: 16,
+    gap: 6,
+  },
+  kicker: {
+    color: '#34d399',
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  title: {
+    color: '#f8fafc',
+  },
+  subtitle: {
+    color: '#ffffff',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  error: {
+    color: '#fda4af',
+    fontSize: 13,
   },
   filters: {
     flexDirection: 'row',
@@ -124,7 +157,8 @@ const styles = StyleSheet.create({
   filterChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: 'rgba(148,163,184,0.45)',
+    backgroundColor: 'rgba(30,41,59,0.78)',
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
@@ -134,7 +168,7 @@ const styles = StyleSheet.create({
   },
   filterText: {
     fontSize: 12,
-    opacity: 0.8,
+    color: '#cbd5e1',
   },
   filterTextActive: {
     fontSize: 12,
@@ -147,33 +181,36 @@ const styles = StyleSheet.create({
   },
   statsCard: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(30,41,59,0.82)',
     padding: 10,
     alignItems: 'center',
   },
   statValue: {
     fontSize: 18,
     fontWeight: '700',
+    color: '#f8fafc',
   },
   statLabel: {
     fontSize: 12,
-    opacity: 0.7,
+    color: '#ffffff',
   },
   podium: {
     gap: 8,
   },
   podiumCard: {
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(30,41,59,0.82)',
     padding: 10,
     gap: 4,
   },
   gold: {
     borderColor: '#f59e0b',
-    backgroundColor: '#fffbeb',
+    backgroundColor: 'rgba(146,64,14,0.35)',
   },
   points: {
     fontWeight: '700',
@@ -182,9 +219,10 @@ const styles = StyleSheet.create({
   entryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(30,41,59,0.82)',
     padding: 10,
     gap: 10,
   },
@@ -192,6 +230,7 @@ const styles = StyleSheet.create({
     width: 36,
     textAlign: 'center',
     fontWeight: '700',
+    color: '#f8fafc',
   },
   entryMain: {
     flex: 1,
@@ -199,15 +238,16 @@ const styles = StyleSheet.create({
   },
   entryMeta: {
     fontSize: 12,
-    opacity: 0.65,
+    color: '#ffffff',
   },
   entryPoints: {
     fontWeight: '700',
     fontSize: 16,
+    color: '#f8fafc',
   },
   refreshButton: {
     borderRadius: 8,
-    backgroundColor: '#111827',
+    backgroundColor: '#1e293b',
     paddingVertical: 10,
     alignItems: 'center',
   },
