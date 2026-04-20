@@ -13,7 +13,7 @@ import type {
 const FALLBACK_API_URL = 'http://10.0.2.2:8080/api';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? FALLBACK_API_URL;
-const LOGIN_PATH = process.env.EXPO_PUBLIC_LOGIN_PATH ?? '/api_login';
+const LOGIN_PATH = process.env.EXPO_PUBLIC_LOGIN_PATH ?? '/login';
 
 let bearerToken: string | null = null;
 
@@ -29,6 +29,11 @@ type HydraCollection<T> = {
 };
 
 type PrimitiveRecord = Record<string, unknown>;
+type LoginIdentity = {
+  id: number | null;
+  email: string;
+  username: string;
+};
 
 class ApiRequestError extends Error {
   status: number;
@@ -83,12 +88,103 @@ function toNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
+function toNullableNumber(value: unknown): number | null {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
 function toString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
 
 function toNullableString(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
+}
+
+function decodeBase64Url(input: string): string | null {
+  try {
+    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4 || 4)) % 4);
+
+    if (typeof globalThis.atob === 'function') {
+      return globalThis.atob(padded);
+    }
+
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(padded, 'base64').toString('utf-8');
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function parseJwtPayload(token: string | null | undefined): PrimitiveRecord | null {
+  if (!token) {
+    return null;
+  }
+
+  const segments = token.split('.');
+  if (segments.length < 2) {
+    return null;
+  }
+
+  const decoded = decodeBase64Url(segments[1]);
+  if (!decoded) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(decoded) as PrimitiveRecord;
+  } catch {
+    return null;
+  }
+}
+
+function parseUserIriToId(value: unknown): number | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const iriMatch = value.match(/\/users\/(\d+)$/);
+  if (!iriMatch) {
+    return null;
+  }
+
+  return toNullableNumber(iriMatch[1]);
+}
+
+function extractIdentityFromToken(token: string | null | undefined): Partial<LoginIdentity> {
+  const payload = parseJwtPayload(token);
+  if (!payload) {
+    return {};
+  }
+
+  const numericSub = toNullableNumber(payload.sub);
+  const iriSub = parseUserIriToId(payload.sub);
+  const id =
+    toNullableNumber(payload.id) ??
+    toNullableNumber(payload.userId) ??
+    toNullableNumber(payload.user_id) ??
+    numericSub ??
+    iriSub ??
+    null;
+
+  const email =
+    toString(payload.email, '') ||
+    toString(payload.preferred_username, '') ||
+    toString(payload.username, '');
+
+  const username =
+    toString(payload.username, '') ||
+    toString(payload.preferred_username, '');
+
+  return {
+    id,
+    email,
+    username,
+  };
 }
 
 function normalizeLeaderboardEntry(raw: unknown, index: number): LeaderboardEntry {
@@ -148,6 +244,63 @@ function normalizeReviewStats(raw: unknown): HuntReviewStats {
 
 function normalizeLeaderboard(payload: unknown): LeaderboardEntry[] {
   return unwrapCollection<unknown>(payload).map(normalizeLeaderboardEntry);
+}
+
+function extractLoginIdentity(payload: LoginResponse, fallback?: Partial<LoginIdentity>): LoginIdentity {
+  const root = payload as PrimitiveRecord;
+  const user = (root.user as PrimitiveRecord | undefined) ?? {};
+  const tokenIdentity = extractIdentityFromToken(payload.token ?? payload.access_token ?? payload.jwt ?? null);
+
+  const id =
+    toNullableNumber(root.id) ??
+    toNullableNumber(root.userId) ??
+    toNullableNumber(root.user_id) ??
+    toNullableNumber(user.id) ??
+    toNullableNumber(user.userId) ??
+    toNullableNumber(user.user_id) ??
+    tokenIdentity.id ??
+    fallback?.id ??
+    null;
+
+  const email =
+    toString(root.email, '') ||
+    toString(user.email, '') ||
+    toString(tokenIdentity.email, '') ||
+    toString(fallback?.email, '');
+
+  const username =
+    toString(root.username, '') ||
+    toString(user.username, '') ||
+    toString(user.userName, '') ||
+    toString(tokenIdentity.username, '') ||
+    toString(fallback?.username, '');
+
+  return { id, email, username };
+}
+
+async function requestWithFallback<T>(paths: string[]): Promise<T> {
+  let lastError: unknown = null;
+
+  for (const path of paths) {
+    try {
+      return await request<T>(path);
+    } catch (error) {
+      lastError = error;
+
+      if (error instanceof ApiRequestError && error.status === 404) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Resource not found');
+}
+
+async function requestCollectionWithFallback<T>(paths: string[]): Promise<T[]> {
+  const payload = await requestWithFallback<unknown>(paths);
+  return unwrapCollection<T>(payload);
 }
 
 export function setAuthToken(token: string | null) {
@@ -233,6 +386,15 @@ export const lootopiaApi = {
 
   getUser: (userId: number) => request<PlayerProfile>(`/users/${userId}`),
 
+  getCurrentUser: () => {
+    const identity = extractIdentityFromToken(bearerToken);
+    if (!identity.id) {
+      throw new Error("Profil indisponible sans userId. Reconnecte-toi pour regenerer une session complete.");
+    }
+
+    return request<PlayerProfile>(`/users/${identity.id}`);
+  },
+
   getAchievements: () => request<unknown>('/achievements').then((payload) => unwrapCollection<Achievement>(payload)),
 
   getHunts: () => request<unknown>('/hunts').then((payload) => unwrapCollection<Hunt>(payload)),
@@ -241,6 +403,8 @@ export const lootopiaApi = {
 
   getAchievementsForUser: (userId: number) =>
     request<unknown>(`/users/${userId}/achievements`).then((payload) => unwrapCollection<Achievement>(payload)),
+
+  getAchievementsForCurrentUser: () => requestCollectionWithFallback<Achievement>(['/achievements']),
 
   getLeaderboardGlobal: () => request<unknown>('/leaderboard/global').then((payload) => normalizeLeaderboard(payload)),
 
@@ -272,11 +436,16 @@ export const lootopiaApi = {
   getMyRank: () => request<UserRank>('/leaderboard/my-rank'),
 };
 
-export function createSessionFromLogin(login: LoginResponse): AuthSession {
+export function createSessionFromLogin(
+  login: LoginResponse,
+  fallbackIdentity?: Partial<{ id: number | null; email: string; username: string }>
+): AuthSession {
+  const identity = extractLoginIdentity(login, fallbackIdentity);
+
   return {
-    userId: login.id,
-    email: login.email,
-    username: login.username,
+    userId: identity.id,
+    email: identity.email,
+    username: identity.username,
     authToken: login.token ?? login.access_token ?? login.jwt ?? null,
   };
 }

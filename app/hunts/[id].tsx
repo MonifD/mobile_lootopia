@@ -81,10 +81,14 @@ export default function HuntDetailScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <ThemedText type="title">Detail chasse</ThemedText>
+        <View style={styles.heroCard}>
+          <ThemedText style={styles.kicker}>Mission</ThemedText>
+          <ThemedText type="title" style={styles.title}>Detail chasse</ThemedText>
+          <ThemedText style={styles.subtitle}>Consulte les infos terrain et partage ton avis de joueur.</ThemedText>
+        </View>
 
-        {loading ? <ActivityIndicator /> : null}
-        {error ? <ThemedText>Erreur: {error}</ThemedText> : null}
+        {loading ? <ActivityIndicator color="#34d399" /> : null}
+        {error ? <ThemedText style={styles.error}>Erreur: {error}</ThemedText> : null}
 
         {data?.hunt ? (
           <>
@@ -162,29 +166,60 @@ export default function HuntDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0b1220',
   },
   content: {
     gap: 12,
     padding: 16,
+    paddingBottom: 28,
+  },
+  heroCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(30,41,59,0.86)',
+    padding: 16,
+    gap: 6,
+  },
+  kicker: {
+    color: '#34d399',
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  title: {
+    color: '#f8fafc',
+  },
+  subtitle: {
+    color: '#ffffff',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  error: {
+    color: '#fda4af',
+    fontSize: 13,
   },
   card: {
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(30,41,59,0.82)',
     gap: 8,
     padding: 12,
   },
   meta: {
     fontSize: 12,
-    opacity: 0.7,
+    color: '#ffffff',
   },
   input: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: 'rgba(148,163,184,0.45)',
+    backgroundColor: 'rgba(30,41,59,0.78)',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#111827',
+    color: '#f8fafc',
   },
   inputMultiline: {
     minHeight: 90,
@@ -202,7 +237,7 @@ const styles = StyleSheet.create({
   },
   reviewLine: {
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: 'rgba(148,163,184,0.25)',
     paddingTop: 8,
     gap: 4,
   },
@@ -210,6 +245,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: '#1e293b',
   },
 });
