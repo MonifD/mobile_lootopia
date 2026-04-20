@@ -247,7 +247,6 @@ function normalizeLeaderboard(payload: unknown): LeaderboardEntry[] {
   return unwrapCollection<unknown>(payload).map(normalizeLeaderboardEntry);
 }
 
-<<<<<<< HEAD
 function normalizeStep(raw: unknown, index: number): Step {
   const source = (raw ?? {}) as PrimitiveRecord;
   const hunt = source.hunt;
@@ -261,7 +260,6 @@ function normalizeStep(raw: unknown, index: number): Step {
     arMarkerUrl: toNullableString(source.arMarkerUrl ?? source.ar_marker_url),
     hunt: typeof hunt === 'string' ? hunt : undefined,
   };
-=======
 function extractLoginIdentity(payload: LoginResponse, fallback?: Partial<LoginIdentity>): LoginIdentity {
   const root = payload as PrimitiveRecord;
   const user = (root.user as PrimitiveRecord | undefined) ?? {};
@@ -317,7 +315,6 @@ async function requestWithFallback<T>(paths: string[]): Promise<T> {
 async function requestCollectionWithFallback<T>(paths: string[]): Promise<T[]> {
   const payload = await requestWithFallback<unknown>(paths);
   return unwrapCollection<T>(payload);
->>>>>>> LOOT-26
 }
 
 export function setAuthToken(token: string | null) {
