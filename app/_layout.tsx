@@ -26,6 +26,15 @@ function RootLayoutNav() {
           <>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="hunts/[id]" options={{ title: 'Chasse' }} />
+            <Stack.Screen
+              name="hunt-map/[id]"
+              options={{
+                title: 'Carte de la chasse',
+                headerStyle: { backgroundColor: '#0f766e' },
+                headerTintColor: '#fff',
+                headerTitleStyle: { fontWeight: '700' },
+              }}
+            />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
           </>
         ) : (

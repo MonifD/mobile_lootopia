@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
@@ -19,6 +19,7 @@ function dateLabel(dateString: string): string {
 export default function HuntDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const huntId = Number(params.id ?? 0);
+  const router = useRouter();
 
   const [rating, setRating] = useState('5');
   const [comment, setComment] = useState('');
@@ -95,6 +96,14 @@ export default function HuntDetailScreen() {
               <ThemedText style={styles.meta}>Cree le: {dateLabel(data.hunt.createdAt)}</ThemedText>
               <ThemedText style={styles.meta}>Etat: {data.hunt.isActive ? 'Active' : 'Inactive'}</ThemedText>
             </View>
+
+            {/* Bouton carte interactive */}
+            <Pressable
+              style={({ pressed }) => [styles.mapButton, pressed && styles.mapButtonPressed]}
+              onPress={() => router.push(`/hunt-map/${huntId}`)}
+            >
+              <ThemedText style={styles.mapButtonText}>🗺️  Voir la carte interactive</ThemedText>
+            </Pressable>
 
             <View style={styles.card}>
               <ThemedText type="defaultSemiBold">Avis et notes</ThemedText>
@@ -211,5 +220,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
     backgroundColor: '#111827',
+  },
+  mapButton: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    backgroundColor: '#0f766e',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  mapButtonPressed: {
+    backgroundColor: '#0d9488',
+  },
+  mapButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });

@@ -7,6 +7,7 @@ import type {
     LeaderboardEntry,
     LeaderboardStats,
     PlayerProfile,
+    Step,
     UserRank,
 } from '@/types/game';
 
@@ -150,6 +151,21 @@ function normalizeLeaderboard(payload: unknown): LeaderboardEntry[] {
   return unwrapCollection<unknown>(payload).map(normalizeLeaderboardEntry);
 }
 
+function normalizeStep(raw: unknown, index: number): Step {
+  const source = (raw ?? {}) as PrimitiveRecord;
+  const hunt = source.hunt;
+
+  return {
+    id: toNumber(source.id, index + 1),
+    orderNumber: toNumber(source.orderNumber ?? source.order_number, index + 1),
+    clue: toString(source.clue, ''),
+    latitude: parseFloat(toString(source.latitude, '0')),
+    longitude: parseFloat(toString(source.longitude, '0')),
+    arMarkerUrl: toNullableString(source.arMarkerUrl ?? source.ar_marker_url),
+    hunt: typeof hunt === 'string' ? hunt : undefined,
+  };
+}
+
 export function setAuthToken(token: string | null) {
   bearerToken = token;
 }
@@ -238,6 +254,34 @@ export const lootopiaApi = {
   getHunts: () => request<unknown>('/hunts').then((payload) => unwrapCollection<Hunt>(payload)),
 
   getHunt: (huntId: number) => request<Hunt>(`/hunts/${huntId}`),
+
+  /**
+   * Récupère les étapes d'une chasse.
+   * Essaie d'abord le filtre IRI (nécessite SearchFilter côté backend).
+   * Si aucun résultat, récupère toutes les étapes et filtre côté client.
+   */
+  getHuntSteps: async (huntId: number): Promise<Step[]> => {
+    // Tentative avec le filtre IRI API Platform
+    try {
+      const payload = await request<unknown>(`/steps?hunt=/api/hunts/${huntId}&itemsPerPage=200`);
+      const items = unwrapCollection<unknown>(payload);
+      if (items.length > 0) {
+        return items.map((s, i) => normalizeStep(s, i));
+      }
+    } catch {
+      // Le filtre n'est pas supporté, on passe au fallback
+    }
+
+    // Fallback : récupère toutes les étapes et filtre côté client
+    const fallbackPayload = await request<unknown>('/steps?itemsPerPage=200');
+    return unwrapCollection<unknown>(fallbackPayload)
+      .map((s, i) => normalizeStep(s, i))
+      .filter((s) => {
+        if (!s.hunt) return false;
+        // Vérifie que l'IRI correspond à la chasse demandée
+        return s.hunt === `/api/hunts/${huntId}` || s.hunt.endsWith(`/${huntId}`);
+      });
+  },
 
   getAchievementsForUser: (userId: number) =>
     request<unknown>(`/users/${userId}/achievements`).then((payload) => unwrapCollection<Achievement>(payload)),

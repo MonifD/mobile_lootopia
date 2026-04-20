@@ -81,3 +81,14 @@ export type HuntReviewStats = {
   totalReviews: number;
   distribution: Record<string, number>;
 };
+
+export type Step = {
+  id: number;
+  orderNumber: number;
+  clue: string;
+  latitude: number;
+  longitude: number;
+  arMarkerUrl: string | null;
+  /** IRI de la chasse parente, ex: "/api/hunts/1" */
+  hunt?: string;
+};
