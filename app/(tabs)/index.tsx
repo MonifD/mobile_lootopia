@@ -26,11 +26,19 @@ export default function HuntsScreen() {
 
         <View style={styles.heroCard}>
           <ThemedText style={styles.kicker}>Terrain de jeu</ThemedText>
-          <ThemedText type="title" style={styles.title}>Chasses disponibles</ThemedText>
-          <ThemedText style={styles.subtitle}>Choisis une mission et commence ton aventure geolocalisee.</ThemedText>
+          <ThemedText type="title" style={styles.title} lightColor="#ffffff" darkColor="#ffffff">
+            Chasses disponibles
+          </ThemedText>
+          <ThemedText style={styles.subtitle} lightColor="#ffffff" darkColor="#ffffff">
+            Choisis une mission et commence ton aventure geolocalisee.
+          </ThemedText>
         </View>
 
-        {loading ? <ThemedText style={styles.feedback}>Chargement...</ThemedText> : null}
+        {loading ? (
+          <ThemedText style={styles.feedback} lightColor="#ffffff" darkColor="#ffffff">
+            Chargement...
+          </ThemedText>
+        ) : null}
         {error ? <ThemedText style={styles.error}>Erreur: {error}</ThemedText> : null}
 
         {data?.length ? (
@@ -47,27 +55,50 @@ export default function HuntsScreen() {
               ]}
             >
               <View style={styles.cardTop}>
-                <ThemedText type="defaultSemiBold" style={styles.cardTitle}>{hunt.title}</ThemedText>
+                <ThemedText
+                  type="defaultSemiBold"
+                  style={styles.cardTitle}
+                  lightColor="#ffffff"
+                  darkColor="#ffffff"
+                >
+                  {hunt.title}
+                </ThemedText>
                 <ThemedText style={[styles.badge, hunt.isActive ? styles.badgeActive : styles.badgeInactive]}>
                   {hunt.isActive ? 'Active' : 'Inactive'}
                 </ThemedText>
               </View>
-              {hunt.description ? <ThemedText style={styles.description}>{hunt.description}</ThemedText> : null}
+              {hunt.description ? (
+                <ThemedText style={styles.description} lightColor="#ffffff" darkColor="#ffffff">
+                  {hunt.description}
+                </ThemedText>
+              ) : null}
               <View style={styles.footer}>
-                {hunt.city ? <ThemedText style={styles.meta}>Lieu: {hunt.city}</ThemedText> : null}
-                <ThemedText style={styles.meta}>Cree: {formatDate(hunt.createdAt)}</ThemedText>
+                {hunt.city ? (
+                  <ThemedText style={styles.meta} lightColor="#ffffff" darkColor="#ffffff">
+                    Lieu: {hunt.city}
+                  </ThemedText>
+                ) : null}
+                <ThemedText style={styles.meta} lightColor="#ffffff" darkColor="#ffffff">
+                  Cree: {formatDate(hunt.createdAt)}
+                </ThemedText>
               </View>
-              <ThemedText style={styles.openHint}>Ouvrir le detail</ThemedText>
+              <ThemedText style={styles.openHint} lightColor="#6ee7b7" darkColor="#6ee7b7">
+                Ouvrir le detail
+              </ThemedText>
             </Pressable>
           ))
         ) : (
           <View style={styles.emptyCard}>
-            <ThemedText style={styles.feedback}>Aucune chasse disponible pour le moment.</ThemedText>
+            <ThemedText style={styles.feedback} lightColor="#ffffff" darkColor="#ffffff">
+              Aucune chasse disponible pour le moment.
+            </ThemedText>
           </View>
         )}
 
         <Pressable style={styles.refreshButton} onPress={() => void refresh()}>
-          <ThemedText style={styles.refreshText}>Rafraichir</ThemedText>
+          <ThemedText style={styles.refreshText} lightColor="#ffffff" darkColor="#ffffff">
+            Rafraichir
+          </ThemedText>
         </Pressable>
       </ScrollView>
     </ThemedView>

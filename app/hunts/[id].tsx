@@ -94,8 +94,8 @@ export default function HuntDetailScreen() {
         {data?.hunt ? (
           <>
             <View style={styles.card}>
-              <ThemedText type="subtitle">{data.hunt.title}</ThemedText>
-              {data.hunt.description ? <ThemedText>{data.hunt.description}</ThemedText> : null}
+              <ThemedText type="subtitle" style={styles.whiteText}>{data.hunt.title}</ThemedText>
+              {data.hunt.description ? <ThemedText style={styles.whiteText}>{data.hunt.description}</ThemedText> : null}
               <ThemedText style={styles.meta}>Ville: {data.hunt.city ?? '-'}</ThemedText>
               <ThemedText style={styles.meta}>Cree le: {dateLabel(data.hunt.createdAt)}</ThemedText>
               <ThemedText style={styles.meta}>Etat: {data.hunt.isActive ? 'Active' : 'Inactive'}</ThemedText>
@@ -110,9 +110,9 @@ export default function HuntDetailScreen() {
             </Pressable>
 
             <View style={styles.card}>
-              <ThemedText type="defaultSemiBold">Avis et notes</ThemedText>
-              <ThemedText>Note moyenne: {data.stats.averageRating.toFixed(1)} / 5</ThemedText>
-              <ThemedText>Total avis: {data.stats.totalReviews}</ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.whiteText}>Avis et notes</ThemedText>
+              <ThemedText style={styles.whiteText}>Note moyenne: {data.stats.averageRating.toFixed(1)} / 5</ThemedText>
+              <ThemedText style={styles.whiteText}>Total avis: {data.stats.totalReviews}</ThemedText>
               {sortedDistribution.map(([star, count]) => (
                 <ThemedText key={star} style={styles.meta}>
                   {star} etoile(s): {count}
@@ -121,7 +121,7 @@ export default function HuntDetailScreen() {
             </View>
 
             <View style={styles.card}>
-              <ThemedText type="defaultSemiBold">Poster un avis</ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.whiteText}>Poster un avis</ThemedText>
               <TextInput
                 style={styles.input}
                 placeholder="Note (1 a 5)"
@@ -146,19 +146,19 @@ export default function HuntDetailScreen() {
             </View>
 
             <View style={styles.card}>
-              <ThemedText type="defaultSemiBold">Commentaires valides</ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.whiteText}>Commentaires valides</ThemedText>
               {data.reviews.length ? (
                 data.reviews.map((review) => (
                   <View key={review.id} style={styles.reviewLine}>
-                    <ThemedText type="defaultSemiBold">
+                    <ThemedText type="defaultSemiBold" style={styles.whiteText}>
                       {review.user?.username ?? 'Joueur'} • {review.rating}/5
                     </ThemedText>
-                    <ThemedText>{review.comment}</ThemedText>
+                    <ThemedText style={styles.whiteText}>{review.comment}</ThemedText>
                     <ThemedText style={styles.meta}>{dateLabel(review.createdAt)}</ThemedText>
                   </View>
                 ))
               ) : (
-                <ThemedText>Aucun avis pour le moment.</ThemedText>
+                <ThemedText style={styles.whiteText}>Aucun avis pour le moment.</ThemedText>
               )}
             </View>
 
@@ -219,6 +219,9 @@ const styles = StyleSheet.create({
   },
   meta: {
     fontSize: 12,
+    color: '#ffffff',
+  },
+  whiteText: {
     color: '#ffffff',
   },
   input: {

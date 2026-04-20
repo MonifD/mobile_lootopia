@@ -85,7 +85,9 @@ export default function LeaderboardScreen() {
         <View style={styles.podium}>
           {topThree.map((entry, index) => (
             <View key={entry.id} style={[styles.podiumCard, index === 0 ? styles.gold : undefined]}>
-              <ThemedText type="defaultSemiBold">#{index + 1} {entry.username}</ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.whiteText}>
+                #{index + 1} {entry.username}
+              </ThemedText>
               <ThemedText style={styles.points}>{entry.totalPoints} pts</ThemedText>
             </View>
           ))}
@@ -95,7 +97,9 @@ export default function LeaderboardScreen() {
           <View key={`${entry.id}-${index}`} style={styles.entryCard}>
             <ThemedText style={styles.rank}>#{entry.rank ?? index + 1}</ThemedText>
             <View style={styles.entryMain}>
-              <ThemedText type="defaultSemiBold">{entry.username}</ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.whiteText}>
+                {entry.username}
+              </ThemedText>
               <ThemedText style={styles.entryMeta}>
                 {entry.level} • {entry.completedHunts} chasses • serie {entry.loginStreak}
               </ThemedText>
@@ -148,6 +152,9 @@ const styles = StyleSheet.create({
   error: {
     color: '#fda4af',
     fontSize: 13,
+  },
+  whiteText: {
+    color: '#ffffff',
   },
   filters: {
     flexDirection: 'row',
