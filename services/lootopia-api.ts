@@ -260,6 +260,8 @@ function normalizeStep(raw: unknown, index: number): Step {
     arMarkerUrl: toNullableString(source.arMarkerUrl ?? source.ar_marker_url),
     hunt: typeof hunt === 'string' ? hunt : undefined,
   };
+}
+
 function extractLoginIdentity(payload: LoginResponse, fallback?: Partial<LoginIdentity>): LoginIdentity {
   const root = payload as PrimitiveRecord;
   const user = (root.user as PrimitiveRecord | undefined) ?? {};
