@@ -40,7 +40,7 @@ export default function SplashScreen() {
   return (
     <View style={styles.container}>
       <Animated.Image
-        source={require('@/assets/images/logo_loot.png')}
+        source={require('@/assets/images/logo_loot-preview.png')}
         style={[
           styles.logo,
           {
