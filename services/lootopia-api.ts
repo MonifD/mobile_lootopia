@@ -262,6 +262,32 @@ function normalizeStep(raw: unknown, index: number): Step {
   };
 }
 
+function normalizeHunt(raw: unknown): Hunt {
+  const source = (raw ?? {}) as PrimitiveRecord;
+
+  // Le sérialiseur Symfony interprète isActive() comme getter de "active" (sans préfixe "is")
+  // mais ne l'associe pas à la propriété $isActive → le champ disparaît de la réponse.
+  // Fallback : si tous les variants sont absents, la valeur par défaut de l'entité est true.
+  const isActiveRaw =
+    source.isActive ??
+    source.is_active ??
+    source.active;
+  const isActive =
+    isActiveRaw === undefined
+      ? true  // champ absent = valeur par défaut de l'entité PHP (true)
+      : isActiveRaw === true || isActiveRaw === 1 || isActiveRaw === 'true' || isActiveRaw === '1';
+
+  return {
+    id: toNumber(source.id),
+    title: toString(source.title),
+    description: toNullableString(source.description),
+    city: toNullableString(source.city),
+    isActive,
+    createdAt: toString(source.createdAt ?? source.created_at),
+    updatedAt: toString(source.updatedAt ?? source.updated_at),
+  };
+}
+
 function extractLoginIdentity(payload: LoginResponse, fallback?: Partial<LoginIdentity>): LoginIdentity {
   const root = payload as PrimitiveRecord;
   const user = (root.user as PrimitiveRecord | undefined) ?? {};
@@ -413,9 +439,13 @@ export const lootopiaApi = {
 
   getAchievements: () => request<unknown>('/achievements').then((payload) => unwrapCollection<Achievement>(payload)),
 
-  getHunts: () => request<unknown>('/hunts').then((payload) => unwrapCollection<Hunt>(payload)),
+  getHunts: () =>
+    request<unknown>('/hunts').then((payload) =>
+      unwrapCollection<unknown>(payload).map(normalizeHunt)
+    ),
 
-  getHunt: (huntId: number) => request<Hunt>(`/hunts/${huntId}`),
+  getHunt: (huntId: number) =>
+    request<unknown>(`/hunts/${huntId}`).then(normalizeHunt),
 
   /**
    * Récupère les étapes d'une chasse.
@@ -468,7 +498,7 @@ export const lootopiaApi = {
   getHuntReviews: (huntId: number) =>
     request<unknown>(`/hunts/${huntId}/reviews`).then((payload) => unwrapCollection<unknown>(payload).map(normalizeReview)),
 
-  postHuntReview: (huntId: number, payload: { rating: number; comment: string }) =>
+  postHuntReview: (huntId: number, payload: { userId: number; rating: number; comment: string }) =>
     request<HuntReview>(`/hunts/${huntId}/reviews`, {
       method: 'POST',
       body: JSON.stringify(payload),

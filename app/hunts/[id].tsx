@@ -1,11 +1,13 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useApiResource } from '@/hooks/use-api-resource';
+import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
+import type { HuntReview } from '@/types/game';
 
 function dateLabel(dateString: string): string {
   const date = new Date(dateString);
@@ -20,10 +22,13 @@ export default function HuntDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const huntId = Number(params.id ?? 0);
   const router = useRouter();
+  const { session } = useAuth();
 
   const [rating, setRating] = useState('5');
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingReview, setPendingReview] = useState<HuntReview | null>(null);
+  const hasReviewed = useRef(false);
 
   const loadData = useCallback(async () => {
     if (!huntId) {
@@ -61,16 +66,31 @@ export default function HuntDetailScreen() {
       return;
     }
 
+    if (!session?.userId) {
+      Alert.alert('Erreur', 'Tu dois etre connecte pour laisser un avis.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       await lootopiaApi.postHuntReview(huntId, {
+        userId: session.userId,
         rating: numericRating,
         comment: comment.trim(),
       });
+      // Affiche le review localement en attente de modération
+      setPendingReview({
+        id: -1,
+        rating: numericRating,
+        comment: comment.trim(),
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        user: { id: session.userId, username: session.username },
+      });
+      hasReviewed.current = true;
       setComment('');
       setRating('5');
       await refresh();
-      Alert.alert('Succès', 'Ton avis a ete envoye.');
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : 'Erreur inconnue';
       Alert.alert('Erreur', message);
@@ -120,33 +140,52 @@ export default function HuntDetailScreen() {
               ))}
             </View>
 
-            <View style={styles.card}>
-              <ThemedText type="defaultSemiBold" style={styles.whiteText}>Poster un avis</ThemedText>
-              <TextInput
-                style={styles.input}
-                placeholder="Note (1 a 5)"
-                placeholderTextColor="#94a3b8"
-                value={rating}
-                keyboardType="number-pad"
-                onChangeText={setRating}
-                editable={!isSubmitting}
-              />
-              <TextInput
-                style={[styles.input, styles.inputMultiline]}
-                placeholder="Ton avis"
-                placeholderTextColor="#94a3b8"
-                value={comment}
-                onChangeText={setComment}
-                editable={!isSubmitting}
-                multiline
-              />
-              <Pressable style={styles.submitBtn} onPress={() => void submitReview()} disabled={isSubmitting}>
-                <ThemedText style={styles.submitBtnText}>{isSubmitting ? 'Envoi...' : 'Publier'}</ThemedText>
-              </Pressable>
-            </View>
+            {!hasReviewed.current ? (
+              <View style={styles.card}>
+                <ThemedText type="defaultSemiBold" style={styles.whiteText}>Poster un avis</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Note (1 a 5)"
+                  placeholderTextColor="#94a3b8"
+                  value={rating}
+                  keyboardType="number-pad"
+                  onChangeText={setRating}
+                  editable={!isSubmitting}
+                />
+                <TextInput
+                  style={[styles.input, styles.inputMultiline]}
+                  placeholder="Ton avis"
+                  placeholderTextColor="#94a3b8"
+                  value={comment}
+                  onChangeText={setComment}
+                  editable={!isSubmitting}
+                  multiline
+                />
+                <Pressable style={styles.submitBtn} onPress={() => void submitReview()} disabled={isSubmitting}>
+                  <ThemedText style={styles.submitBtnText}>{isSubmitting ? 'Envoi...' : 'Publier'}</ThemedText>
+                </Pressable>
+              </View>
+            ) : null}
 
             <View style={styles.card}>
-              <ThemedText type="defaultSemiBold" style={styles.whiteText}>Commentaires valides</ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.whiteText}>Commentaires</ThemedText>
+
+              {/* Review en attente de validation (soumis dans cette session) */}
+              {pendingReview ? (
+                <View style={styles.pendingReviewLine}>
+                  <View style={styles.pendingBadgeRow}>
+                    <View style={styles.pendingBadge}>
+                      <ThemedText style={styles.pendingBadgeText}>⏳ En attente de validation</ThemedText>
+                    </View>
+                  </View>
+                  <ThemedText type="defaultSemiBold" style={styles.whiteText}>
+                    {pendingReview.user?.username ?? 'Toi'} • {pendingReview.rating}/5
+                  </ThemedText>
+                  <ThemedText style={styles.whiteText}>{pendingReview.comment}</ThemedText>
+                </View>
+              ) : null}
+
+              {/* Reviews approuvés */}
               {data.reviews.length ? (
                 data.reviews.map((review) => (
                   <View key={review.id} style={styles.reviewLine}>
@@ -157,9 +196,9 @@ export default function HuntDetailScreen() {
                     <ThemedText style={styles.meta}>{dateLabel(review.createdAt)}</ThemedText>
                   </View>
                 ))
-              ) : (
-                <ThemedText style={styles.whiteText}>Aucun avis pour le moment.</ThemedText>
-              )}
+              ) : !pendingReview ? (
+                <ThemedText style={styles.whiteText}>Aucun avis approuve pour le moment.</ThemedText>
+              ) : null}
             </View>
 
             <Pressable style={styles.refreshBtn} onPress={() => void refresh()}>
@@ -276,5 +315,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 15,
+  },
+  pendingReviewLine: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148,163,184,0.25)',
+    paddingTop: 8,
+    gap: 6,
+  },
+  pendingBadgeRow: {
+    flexDirection: 'row',
+  },
+  pendingBadge: {
+    backgroundColor: 'rgba(245,158,11,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.5)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  pendingBadgeText: {
+    fontSize: 11,
+    color: '#fbbf24',
+    fontWeight: '600',
   },
 });
