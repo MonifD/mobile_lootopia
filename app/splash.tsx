@@ -33,7 +33,7 @@ export default function SplashScreen() {
     ]);
 
     sequence.start(() => {
-      router.replace('/welcome');
+      router.replace('/video');
     });
   }, [fadeAnim, scaleAnim, router]);
 
