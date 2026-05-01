@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -12,6 +13,7 @@ import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { ThemedText } from '@/components/themed-text';
 import { useApiResource } from '@/hooks/use-api-resource';
 import { usePlayerLocation } from '@/hooks/use-player-location';
+import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
 import type { Step } from '@/types/game';
 
@@ -50,6 +52,14 @@ function haversineDistance(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * Extrait l'ID numérique d'un IRI de type "/api/steps/42"
+ */
+function extractIdFromIri(iri: string): number | null {
+  const match = iri.match(/\/(\d+)$/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
 // ─── Sous-composants ────────────────────────────────────────────────────────────
 
 /** Marqueur personnalisé pour la position du joueur */
@@ -85,20 +95,23 @@ function StepPin({
   index,
   isNear,
   isSelected,
+  isDone,
 }: {
   index: number;
   isNear: boolean;
   isSelected: boolean;
+  isDone: boolean;
 }) {
   return (
     <View
       style={[
         pinStyles.pin,
-        isNear && pinStyles.pinNear,
+        isNear && !isDone && pinStyles.pinNear,
+        isDone && pinStyles.pinDone,
         isSelected && pinStyles.pinSelected,
       ]}
     >
-      <ThemedText style={pinStyles.pinText}>{index + 1}</ThemedText>
+      <ThemedText style={pinStyles.pinText}>{isDone ? '✓' : index + 1}</ThemedText>
     </View>
   );
 }
@@ -122,6 +135,10 @@ const pinStyles = StyleSheet.create({
   pinNear: {
     backgroundColor: '#0f766e',
   },
+  pinDone: {
+    backgroundColor: '#16a34a',
+    borderColor: '#86efac',
+  },
   pinSelected: {
     backgroundColor: '#f59e0b',
     transform: [{ scale: 1.2 }],
@@ -140,6 +157,7 @@ export default function HuntMapScreen() {
   const huntId = Number(id ?? 0);
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
+  const { session } = useAuth();
 
   const [selectedStep, setSelectedStep] = useState<Step | null>(null);
 
@@ -150,6 +168,24 @@ export default function HuntMapScreen() {
   // Étapes de la chasse
   const loadSteps = useCallback(() => lootopiaApi.getHuntSteps(huntId), [huntId]);
   const { data: steps, loading: stepsLoading, error: stepsError } = useApiResource(loadSteps);
+
+  // Participations de l'utilisateur connecté (étapes déjà validées)
+  const loadParticipations = useCallback(() => {
+    if (!session?.userId) return Promise.resolve([]);
+    return lootopiaApi.getMyParticipations(session.userId).catch(() => []);
+  }, [session?.userId]);
+  const { data: participations } = useApiResource(loadParticipations);
+
+  // Ensemble des IDs d'étapes déjà validées
+  const doneStepIds = useMemo<Set<number>>(() => {
+    const set = new Set<number>();
+    if (!participations) return set;
+    for (const p of participations) {
+      const stepId = extractIdFromIri(p.step);
+      if (stepId !== null) set.add(stepId);
+    }
+    return set;
+  }, [participations]);
 
   // Calcule quelles étapes sont à portée du joueur
   const nearStepIds = useMemo<Set<number>>(() => {
@@ -204,6 +240,12 @@ export default function HuntMapScreen() {
   }, [steps, location]);
 
   const isLoading = stepsLoading || locationLoading;
+
+  const openArMarker = (url: string) => {
+    Linking.openURL(url).catch(() => {
+      // URL invalide ou app non disponible — silencieux
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -272,6 +314,7 @@ export default function HuntMapScreen() {
                 index={index}
                 isNear={nearStepIds.has(step.id)}
                 isSelected={selectedStep?.id === step.id}
+                isDone={doneStepIds.has(step.id)}
               />
             </Marker>
           ))}
@@ -283,15 +326,19 @@ export default function HuntMapScreen() {
         <View style={styles.legend}>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: '#2563eb' }]} />
-            <ThemedText style={styles.legendText}>Ma position (rayon {PROXIMITY_RADIUS}m)</ThemedText>
+            <ThemedText style={styles.legendText}>Ma position ({PROXIMITY_RADIUS}m)</ThemedText>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: '#0f766e' }]} />
             <ThemedText style={styles.legendText}>Étape à portée</ThemedText>
           </View>
           <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#16a34a' }]} />
+            <ThemedText style={styles.legendText}>Étape validée ✓</ThemedText>
+          </View>
+          <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-            <ThemedText style={styles.legendText}>Étape sélectionnée</ThemedText>
+            <ThemedText style={styles.legendText}>Sélectionnée</ThemedText>
           </View>
         </View>
       )}
@@ -317,15 +364,23 @@ export default function HuntMapScreen() {
                 style={[
                   styles.stepIndexBadge,
                   nearStepIds.has(selectedStep.id) && styles.stepIndexBadgeNear,
+                  doneStepIds.has(selectedStep.id) && styles.stepIndexBadgeDone,
                 ]}
               >
                 <ThemedText style={styles.stepIndexText}>
-                  {(steps?.findIndex((s) => s.id === selectedStep.id) ?? 0) + 1}
+                  {doneStepIds.has(selectedStep.id)
+                    ? '✓'
+                    : (steps?.findIndex((s) => s.id === selectedStep.id) ?? 0) + 1}
                 </ThemedText>
               </View>
-              <ThemedText style={styles.stepPanelTitle}>
-                Étape {(steps?.findIndex((s) => s.id === selectedStep.id) ?? 0) + 1}
-              </ThemedText>
+              <View>
+                <ThemedText style={styles.stepPanelTitle}>
+                  Étape {(steps?.findIndex((s) => s.id === selectedStep.id) ?? 0) + 1}
+                </ThemedText>
+                {doneStepIds.has(selectedStep.id) ? (
+                  <ThemedText style={styles.doneBadge}>✅ Déjà validée</ThemedText>
+                ) : null}
+              </View>
             </View>
             <Pressable
               style={styles.closeBtn}
@@ -338,13 +393,34 @@ export default function HuntMapScreen() {
 
           {/* Contenu : indice révélé ou message d'approche */}
           {nearStepIds.has(selectedStep.id) ? (
-            <View style={styles.clueBox}>
+            <View style={[styles.clueBox, doneStepIds.has(selectedStep.id) && styles.clueBoxDone]}>
               <ThemedText style={styles.clueLabel}>🔍 Indice révélé</ThemedText>
               <ThemedText style={styles.clueText}>{selectedStep.clue}</ThemedText>
               {selectedStep.arMarkerUrl ? (
-                <View style={styles.arBadge}>
-                  <ThemedText style={styles.arBadgeText}>🎯 Marqueur AR disponible</ThemedText>
-                </View>
+                <Pressable
+                  style={styles.arBadge}
+                  onPress={() => openArMarker(selectedStep.arMarkerUrl!)}
+                >
+                  <ThemedText style={styles.arBadgeText}>🎯 Ouvrir le marqueur AR →</ThemedText>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : doneStepIds.has(selectedStep.id) ? (
+            // Étape déjà validée mais on n'est plus à portée
+            <View style={styles.doneBox}>
+              <ThemedText style={styles.doneBoxText}>
+                ✅ Tu as déjà validé cette étape.
+              </ThemedText>
+              {selectedStep.clue ? (
+                <ThemedText style={styles.clueText}>{selectedStep.clue}</ThemedText>
+              ) : null}
+              {selectedStep.arMarkerUrl ? (
+                <Pressable
+                  style={styles.arBadge}
+                  onPress={() => openArMarker(selectedStep.arMarkerUrl!)}
+                >
+                  <ThemedText style={styles.arBadgeText}>🎯 Ouvrir le marqueur AR →</ThemedText>
+                </Pressable>
               ) : null}
             </View>
           ) : (
@@ -507,6 +583,9 @@ const styles = StyleSheet.create({
   stepIndexBadgeNear: {
     backgroundColor: '#0f766e',
   },
+  stepIndexBadgeDone: {
+    backgroundColor: '#16a34a',
+  },
   stepIndexText: {
     color: '#fff',
     fontWeight: '700',
@@ -516,6 +595,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: '#0f172a',
+  },
+  doneBadge: {
+    fontSize: 12,
+    color: '#16a34a',
+    fontWeight: '600',
+    marginTop: 1,
   },
   closeBtn: {
     width: 30,
@@ -540,6 +625,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#86efac',
   },
+  clueBoxDone: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#4ade80',
+  },
   clueLabel: {
     fontSize: 12,
     fontWeight: '700',
@@ -552,17 +641,36 @@ const styles = StyleSheet.create({
     color: '#14532d',
     lineHeight: 22,
   },
+
+  // Marqueur AR (tappable)
   arBadge: {
     alignSelf: 'flex-start',
     backgroundColor: '#dcfce7',
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 6,
     marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#4ade80',
   },
   arBadgeText: {
     fontSize: 12,
     color: '#166534',
+    fontWeight: '700',
+  },
+
+  // Étape déjà validée (hors portée)
+  doneBox: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#4ade80',
+  },
+  doneBoxText: {
+    fontSize: 14,
+    color: '#15803d',
     fontWeight: '600',
   },
 

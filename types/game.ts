@@ -16,6 +16,7 @@ export type PlayerProfile = {
   avatarUrl: string | null;
   totalPoints: number;
   completedHunts: number;
+  completedSteps: number;
   loginStreak: number;
   level: string;
   lastActivityAt: string | null;
@@ -91,4 +92,13 @@ export type Step = {
   arMarkerUrl: string | null;
   /** IRI de la chasse parente, ex: "/api/hunts/1" */
   hunt?: string;
+};
+
+export type Participation = {
+  id: number;
+  /** IRI de l'étape, ex: "/api/steps/42" */
+  step: string;
+  /** IRI de l'utilisateur, ex: "/api/users/7" */
+  user: string;
+  completedAt: string | null;
 };

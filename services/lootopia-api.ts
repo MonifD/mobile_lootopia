@@ -6,6 +6,7 @@ import type {
     HuntReviewStats,
     LeaderboardEntry,
     LeaderboardStats,
+    Participation,
     PlayerProfile,
     Step,
     UserRank,
@@ -349,6 +350,39 @@ export function setAuthToken(token: string | null) {
   bearerToken = token;
 }
 
+/** Upload multipart/form-data — ne force pas Content-Type pour que fetch pose la boundary */
+export async function requestMultipart<T>(path: string, formData: FormData, method = 'POST'): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), {
+      method,
+      headers: {
+        Accept: 'application/json',
+        ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+      },
+      body: formData,
+    });
+  } catch {
+    const apiUrl = API_BASE_URL.replace(/\/$/, '');
+    throw new Error(`Impossible de joindre l'API (${apiUrl}).`);
+  }
+
+  const text = await response.text();
+  const parsed = parseJsonSafe(text);
+
+  if (!response.ok) {
+    const message =
+      (parsed as ApiErrorPayload | null)?.message ??
+      (parsed as ApiErrorPayload | null)?.error ??
+      (parsed as ApiErrorPayload | null)?.detail ??
+      (parsed as ApiErrorPayload | null)?.['hydra:description'] ??
+      `HTTP ${response.status}`;
+    throw new ApiRequestError(message, response.status);
+  }
+
+  return unwrapData<T>(parsed);
+}
+
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
 
@@ -428,6 +462,22 @@ export const lootopiaApi = {
 
   getUser: (userId: number) => request<PlayerProfile>(`/users/${userId}`),
 
+  updateProfile: (userId: number, data: { username?: string; city?: string }) =>
+    request<PlayerProfile>(`/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/merge-patch+json' },
+      body: JSON.stringify(data),
+    }),
+
+  uploadAvatar: (userId: number, imageUri: string, mimeType: string, fileName: string) => {
+    const formData = new FormData();
+    formData.append('avatar', { uri: imageUri, type: mimeType, name: fileName } as unknown as Blob);
+    return requestMultipart<{ avatarUrl: string }>(`/users/${userId}/avatar`, formData);
+  },
+
+  deleteAvatar: (userId: number) =>
+    request<void>(`/users/${userId}/avatar`, { method: 'DELETE' }),
+
   getCurrentUser: () => {
     const identity = extractIdentityFromToken(bearerToken);
     if (!identity.id) {
@@ -493,6 +543,9 @@ export const lootopiaApi = {
   getLeaderboardWeeklyStars: () =>
     request<unknown>('/leaderboard/weekly-stars').then((payload) => normalizeLeaderboard(payload)),
 
+  getLeaderboardLocal: (city: string) =>
+    request<unknown>(`/leaderboard/local/${encodeURIComponent(city)}`).then((payload) => normalizeLeaderboard(payload)),
+
   getLeaderboardStats: () => request<unknown>('/leaderboard/stats').then((payload) => normalizeLeaderboardStats(payload)),
 
   getHuntReviews: (huntId: number) =>
@@ -508,6 +561,21 @@ export const lootopiaApi = {
     request<unknown>(`/hunts/${huntId}/reviews/stats`).then((payload) => normalizeReviewStats(payload)),
 
   getMyRank: () => request<UserRank>('/leaderboard/my-rank'),
+
+  /**
+   * Récupère le rang d'un utilisateur spécifique.
+   * Endpoint: GET /users/{id}/rank → { rank, total, percentile }
+   */
+  getUserRank: (userId: number) => request<UserRank>(`/users/${userId}/rank`),
+
+  /**
+   * Récupère toutes les participations (étapes validées) d'un utilisateur.
+   * Endpoint: GET /participations?user=/api/users/{id}
+   * Chaque participation contient l'IRI de l'étape et la date de complétion.
+   */
+  getMyParticipations: (userId: number) =>
+    request<unknown>(`/participations?user=/api/users/${userId}&itemsPerPage=200`)
+      .then((payload) => unwrapCollection<Participation>(payload)),
 };
 
 export function createSessionFromLogin(

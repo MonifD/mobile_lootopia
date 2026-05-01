@@ -1023,7 +1023,7 @@ import {
   Text,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Audio, Video, ResizeMode, type AVPlaybackStatus } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import Svg, {
   Ellipse,
   Rect,
@@ -1256,8 +1256,15 @@ export default function WelcomeScreen() {
   const { session } = useAuth();
   const isSignedIn  = !!session || process.env.EXPO_PUBLIC_BYPASS_AUTH === 'true';
   const welcomeVideoSource = require('@/assets/images/videoVieux.mp4');
-  const videoRef = useRef<Video>(null);
   const hasRevealedRef = useRef(false);
+
+  // ── expo-video player ────────────────────────────────────────────────────
+  const player = useVideoPlayer(welcomeVideoSource, (p) => {
+    p.volume = 1.0;
+    p.muted = false;
+    p.loop = false;
+    p.play();
+  });
 
   // ── Animation refs ────────────────────────────────────────────────────────
   const heroOpacity = useRef(new Animated.Value(0)).current;
@@ -1292,33 +1299,24 @@ export default function WelcomeScreen() {
     ]).start();
   }, [ctaOpacity, ctaY]);
 
-  const onVideoStatusUpdate = useCallback(
-    async (status: AVPlaybackStatus) => {
-      if (!status.isLoaded || hasRevealedRef.current) return;
-      if (!status.didJustFinish) return;
-
+  // Détecte la fin de lecture via expo-video (remplace onPlaybackStatusUpdate)
+  useEffect(() => {
+    const sub = player.addListener('playToEnd', () => {
+      if (hasRevealedRef.current) return;
       hasRevealedRef.current = true;
-
-      // Fin réelle de vidéo, puis freeze sur le visage du début.
+      // Freeze sur la première frame (en secondes)
       try {
-        await videoRef.current?.setPositionAsync(freezeFaceMs);
-        await videoRef.current?.pauseAsync();
+        player.currentTime = freezeFaceMs / 1000;
+        player.pause();
       } catch {
-        // No-op: même si la pause échoue, on révèle le CTA.
+        // No-op
       }
       revealCta();
-    },
-    [revealCta, freezeFaceMs]
-  );
+    });
+    return () => sub.remove();
+  }, [player, revealCta, freezeFaceMs]);
 
   useEffect(() => {
-    Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-    }).catch(() => {
-      // No-op: on garde le flux même si le mode audio ne peut pas être forcé.
-    });
 
     // Entry sequence
     Animated.sequence([
@@ -1373,16 +1371,13 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.root}>
 
-      <Video
-        ref={videoRef}
-        source={welcomeVideoSource}
+      <VideoView
+        player={player}
         style={styles.bgMedia}
-        resizeMode={ResizeMode.COVER}
-        progressUpdateIntervalMillis={120}
-        onPlaybackStatusUpdate={onVideoStatusUpdate}
-        shouldPlay
-        isMuted={false}
-        volume={1.0}
+        contentFit="cover"
+        nativeControls={false}
+        allowsFullscreen={false}
+        allowsPictureInPicture={false}
       />
 
       {/* Overlay lisibilité (surtout en bas pour le CTA) */}
