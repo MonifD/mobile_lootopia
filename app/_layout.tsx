@@ -22,6 +22,8 @@ function AuthGuard() {
     const inPublicRoute =
       segments[0] === 'splash' ||
       segments[0] === 'welcome' ||
+      segments[0] === 'video' ||
+      segments[0] === 'home' ||
       segments.length === 0;
 
     if (!isSignedIn && !inAuthGroup && !inPublicRoute) {
@@ -42,7 +44,9 @@ function RootLayoutNav() {
       {/* Tous les écrans déclarés inconditionnellement — règle expo-router */}
       <Stack>
         <Stack.Screen name="splash" options={{ headerShown: false }} />
+        <Stack.Screen name="video" options={{ headerShown: false }} />
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="home" options={{ headerShown: false }} />
         <Stack.Screen name="welcome" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
