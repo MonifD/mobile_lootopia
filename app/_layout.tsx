@@ -21,15 +21,13 @@ function AuthGuard() {
     const inAuthGroup = segments[0] === '(auth)';
     const inPublicRoute =
       segments[0] === 'splash' ||
-      segments[0] === 'welcome' ||
       segments[0] === 'video' ||
-      segments[0] === 'home' ||
-      segments.length === 0;
+      segments[0] === 'welcome';
 
     if (!isSignedIn && !inAuthGroup && !inPublicRoute) {
-      router.replace('/(auth)/login');
-    } else if (isSignedIn && inAuthGroup) {
-      router.replace('/(tabs)');
+      router.replace('/welcome');
+    } else if (isSignedIn && (inAuthGroup || segments[0] === 'welcome')) {
+      router.replace('/home');
     }
   }, [isLoading, session, segments, router]);
 

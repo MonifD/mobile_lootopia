@@ -56,7 +56,8 @@
           "locationAlwaysAndWhenInUsePermission": "Lootopia utilise votre position pour vous guider vers les étapes de la chasse au trésor."
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,

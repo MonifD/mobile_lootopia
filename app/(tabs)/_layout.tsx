@@ -37,7 +37,7 @@ export default function TabLayout() {
         },
         headerRight: () => (
           <Pressable
-            onPress={() => router.replace('/welcome')}
+            onPress={() => router.replace('/home')}
             style={{
               marginRight: 12,
               borderRadius: 999,

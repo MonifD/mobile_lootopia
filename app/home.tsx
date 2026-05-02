@@ -3,69 +3,132 @@ import {
   Animated,
   Easing,
   ImageBackground,
-  StyleSheet,
-  View,
   Pressable,
-  Text,
   SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts } from 'expo-font';
 import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
-import { Link, useRouter } from 'expo-router';
-import { useAuth } from '@/providers/auth-provider';
+import { useRouter } from 'expo-router';
+
+function CubeButton({ onPress }: { onPress: () => void }) {
+  const floatY = useRef(new Animated.Value(0)).current;
+  const rotate = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const floatLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatY, {
+          toValue: -10,
+          duration: 1200,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatY, {
+          toValue: 0,
+          duration: 1200,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    const rotateLoop = Animated.loop(
+      Animated.timing(rotate, {
+        toValue: 1,
+        duration: 6000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+
+    floatLoop.start();
+    rotateLoop.start();
+
+    return () => {
+      floatLoop.stop();
+      rotateLoop.stop();
+    };
+  }, [floatY, rotate]);
+
+  const spin = rotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.cubePressable, pressed && styles.cubePressed]}>
+      <Animated.View style={[styles.cubeWrap, { transform: [{ translateY: floatY }] }]}>
+        <Animated.View style={[styles.cubeOrbit, { transform: [{ rotate: spin }] }]}>
+          <View style={[styles.cubeFace, styles.cubeFaceTop]} />
+          <View style={[styles.cubeFace, styles.cubeFaceRight]} />
+          <View style={[styles.cubeFace, styles.cubeFaceFront]}>
+            <Text style={styles.cubeKicker}>Explorer</Text>
+            <Text style={styles.cubeTitle}>Liste des chasses</Text>
+            <Text style={styles.cubeSubtitle}>Ouvre tes missions et rejoins le terrain de jeu</Text>
+            <View style={styles.cubeCta}>
+              <Text style={styles.cubeCtaText}>Entrer</Text>
+            </View>
+          </View>
+        </Animated.View>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function SidePill({ label, hint, onPress }: { label: string; hint: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.sidePill, pressed && styles.sidePillPressed]}>
+      <LinearGradient
+        colors={['rgba(15,23,42,0.92)', 'rgba(30,41,59,0.94)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.sidePillInner}
+      >
+        <Text style={styles.sidePillLabel}>{label}</Text>
+        <Text style={styles.sidePillHint}>{hint}</Text>
+      </LinearGradient>
+    </Pressable>
+  );
+}
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { session } = useAuth();
-  const [fontsLoaded] = useFonts({
-    Orbitron_700Bold,
-  });
-  const isSignedIn = !!session || process.env.EXPO_PUBLIC_BYPASS_AUTH === 'true';
-
-  // Animation references
-  const slideUp = useRef(new Animated.Value(60)).current;
+  const [fontsLoaded] = useFonts({ Orbitron_700Bold });
   const fadeIn = useRef(new Animated.Value(0)).current;
-  const btnScale1 = useRef(new Animated.Value(0.95)).current;
-  const btnScale2 = useRef(new Animated.Value(0.95)).current;
+  const slideUp = useRef(new Animated.Value(24)).current;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(slideUp, {
-          toValue: 0,
-          duration: 600,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeIn, {
-          toValue: 1,
-          duration: 600,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.stagger(100, [
-        Animated.spring(btnScale1, { toValue: 1, useNativeDriver: true }),
-        Animated.spring(btnScale2, { toValue: 1, useNativeDriver: true }),
-      ]),
+    Animated.parallel([
+      Animated.timing(fadeIn, {
+        toValue: 1,
+        duration: 700,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideUp, {
+        toValue: 0,
+        duration: 700,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
     ]).start();
-  }, [slideUp, fadeIn, btnScale1, btnScale2]);
-
-  useEffect(() => {
-    if (isSignedIn) {
-      router.replace('/(tabs)');
-    }
-  }, [isSignedIn, router]);
+  }, [fadeIn, slideUp]);
 
   return (
     <ImageBackground
       source={require('@/assets/images/PersoAccueil.webp')}
       style={styles.root}
-      imageStyle={styles.bgImage}
-      resizeMode="cover">
-  
-      <SafeAreaView style={styles.container}>
+      resizeMode="cover"
+    >
+      <View style={styles.overlay} />
+      <View style={[styles.glow, styles.glowLeft]} />
+      <View style={[styles.glow, styles.glowRight]} />
+
+      <SafeAreaView style={styles.safeArea}>
         <Animated.View
           style={[
             styles.content,
@@ -73,68 +136,45 @@ export default function HomeScreen() {
               opacity: fadeIn,
               transform: [{ translateY: slideUp }],
             },
-          ]}>
-          
-          {/* Main Title */}
-          <View style={styles.titleSection}>
-            <Text style={styles.mainTitle}>LOOTOPIA</Text>
+          ]}
+        >
+          <View style={styles.header}>
+            <Text style={[styles.badge, fontsLoaded && styles.orbitron]}>LOOTOPIA</Text>
+            <Text style={[styles.title, fontsLoaded && styles.orbitron]}>Bienvenue sur ton camp de base</Text>
             <Text style={styles.subtitle}>
-              Chasse au trésor • Énigmes • Récompenses réelles
+              Choisis ton point d'entrée. La liste des chasses reste au centre, les autres accès tournent autour.
             </Text>
           </View>
 
-          {/* Action Buttons */}
-          <View style={styles.buttonsContainer}>
-            {/* Login Button */}
-            <Link href="/login" asChild>
-              <Pressable style={({ pressed }) => pressed && styles.buttonPressed}>
-                <Animated.View style={{ transform: [{ scale: btnScale1 }] }}>
-                  <LinearGradient
-                    colors={['#10b981', '#047857']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.primaryBtn}>
-                    <View style={styles.btnInnerShade} />
-                    <View style={styles.btnLeft}>
-                      <Text style={styles.btnEyebrow}>Joueur existant</Text>
-                      <Text style={[styles.btnText, fontsLoaded && styles.btnTextGame]}>Se connecter</Text>
-                    </View>
-                    <View style={styles.arrowBubble}>
-                      <Text style={styles.btnArrow}>→</Text>
-                    </View>
-                  </LinearGradient>
-                </Animated.View>
-              </Pressable>
-            </Link>
+          <View style={styles.heroArea}>
+            <View style={styles.sideLeft}>
+              <SidePill
+                label="Classement"
+                hint="Voir les meilleurs joueurs"
+                onPress={() => router.push('/(tabs)/leaderboard')}
+              />
+              <SidePill
+                label="Profil"
+                hint="Ajuster ta ville et ton identité"
+                onPress={() => router.push('/(tabs)/profile')}
+              />
+            </View>
 
-            {/* Register Button */}
-            <Link href="/register" asChild>
-              <Pressable style={({ pressed }) => pressed && styles.buttonPressed}>
-                <Animated.View style={{ transform: [{ scale: btnScale2 }] }}>
-                  <LinearGradient
-                    colors={['#06b6d4', '#0f766e']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.secondaryBtn}>
-                    <View style={styles.btnInnerShade} />
-                    <View style={styles.btnLeft}>
-                      <Text style={styles.btnEyebrow}>Nouveau joueur</Text>
-                      <Text style={[styles.btnText, fontsLoaded && styles.btnTextGame]}>Créer un compte</Text>
-                    </View>
-                    <View style={styles.arrowBubble}>
-                      <Text style={styles.btnArrow}>→</Text>
-                    </View>
-                  </LinearGradient>
-                </Animated.View>
-              </Pressable>
-            </Link>
+            <CubeButton onPress={() => router.push('/(tabs)')} />
+
+            <View style={styles.sideRight}>
+              <SidePill
+                label="Accomplissements"
+                hint="Suivre ta progression"
+                onPress={() => router.push('/(tabs)/explore')}
+              />
+              <SidePill
+                label="Reprendre"
+                hint="Retour direct vers les chasses"
+                onPress={() => router.push('/(tabs)')}
+              />
+            </View>
           </View>
-
-          {/* Legal text */}
-          <Text style={styles.legal}>
-            En continuant, tu acceptes nos{' '}
-            <Text style={styles.legalLink}>Conditions d'utilisation</Text>
-          </Text>
         </Animated.View>
       </SafeAreaView>
     </ImageBackground>
@@ -144,138 +184,201 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: '#060b14',
   },
-  bgImage: {
-    opacity: 1,
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(6,11,20,0.55)',
   },
-  container: {
+  glow: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 999,
+    opacity: 0.22,
+  },
+  glowLeft: {
+    left: -70,
+    top: 120,
+    backgroundColor: '#10b981',
+  },
+  glowRight: {
+    right: -80,
+    top: 220,
+    backgroundColor: '#06b6d4',
+  },
+  safeArea: {
     flex: 1,
-    backgroundColor: 'transparent',
-    paddingHorizontal: 20,
   },
   content: {
     flex: 1,
-    justifyContent: 'flex-end',
-    paddingBottom: 46,
-    gap: 18,
+    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 18,
+    justifyContent: 'space-between',
   },
-  titleSection: {
-    gap: 8,
-    marginBottom: 8,
-    alignItems: 'center',
+  header: {
+    gap: 10,
   },
-  mainTitle: {
-    fontSize: 52,
-    fontWeight: '900',
-    color: '#f0f9ff',
+  badge: {
+    alignSelf: 'flex-start',
+    color: '#86efac',
+    fontSize: 11,
+    fontWeight: '800',
     letterSpacing: 2,
-    textShadowColor: 'rgba(16, 185, 129, 0.45)',
+    textTransform: 'uppercase',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(134,239,172,0.35)',
+    backgroundColor: 'rgba(15,23,42,0.65)',
+  },
+  orbitron: {
+    fontFamily: 'Orbitron_700Bold',
+  },
+  title: {
+    color: '#f8fafc',
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '900',
+    textShadowColor: 'rgba(16,185,129,0.32)',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 24,
+    textShadowRadius: 20,
   },
   subtitle: {
+    color: 'rgba(226,232,240,0.92)',
     fontSize: 13,
-    color: 'rgba(203, 213, 225, 0.92)',
-    fontWeight: '500',
-    letterSpacing: 0.3,
-    lineHeight: 18,
-    textAlign: 'center',
+    lineHeight: 19,
+    maxWidth: 330,
   },
-  buttonsContainer: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
-    padding: 14,
+  heroArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  sideLeft: {
+    flex: 1,
     gap: 12,
+    paddingRight: 4,
+  },
+  sideRight: {
+    flex: 1,
+    gap: 12,
+    paddingLeft: 4,
+  },
+  cubePressable: {
+    flex: 1.35,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cubePressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  cubeWrap: {
+    width: '100%',
+    aspectRatio: 0.86,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cubeOrbit: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cubeFace: {
+    position: 'absolute',
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
     shadowColor: '#10b981',
-    shadowOpacity: 0.24,
+    shadowOpacity: 0.34,
     shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
     elevation: 6,
   },
-  primaryBtn: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  cubeFaceTop: {
+    width: '82%',
+    height: '82%',
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    transform: [{ translateX: -14 }, { translateY: -16 }, { rotate: '-8deg' }],
+    opacity: 0.8,
+  },
+  cubeFaceRight: {
+    width: '82%',
+    height: '82%',
+    backgroundColor: 'rgba(6,182,212,0.18)',
+    transform: [{ translateX: 14 }, { translateY: 10 }, { rotate: '8deg' }],
+    opacity: 0.9,
+  },
+  cubeFaceFront: {
+    width: '84%',
+    height: '84%',
+    padding: 18,
+    justifyContent: 'flex-end',
+    gap: 8,
+    backgroundColor: 'rgba(2,6,23,0.92)',
+    borderColor: 'rgba(16,185,129,0.45)',
     overflow: 'hidden',
-    paddingVertical: 13,
-    paddingHorizontal: 20,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.26)',
-    shadowColor: '#10b981',
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
   },
-  secondaryBtn: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-    paddingVertical: 13,
-    paddingHorizontal: 20,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.26)',
-    shadowColor: '#06b6d4',
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  btnInnerShade: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.16)',
-  },
-  btnLeft: {
-    gap: 2,
-  },
-  btnEyebrow: {
-    color: 'rgba(240, 253, 250, 0.8)',
+  cubeKicker: {
+    color: '#6ee7b7',
     fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    fontWeight: '800',
+  },
+  cubeTitle: {
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '900',
+    lineHeight: 22,
+  },
+  cubeSubtitle: {
+    color: 'rgba(226,232,240,0.78)',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  cubeCta: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#10b981',
+  },
+  cubeCtaText: {
+    color: '#052e16',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
-  btnText: {
-    color: 'white',
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+  sidePill: {
+    borderRadius: 22,
+    overflow: 'hidden',
   },
-  btnTextGame: {
-    fontFamily: 'Orbitron_700Bold',
-    letterSpacing: 0.7,
+  sidePillPressed: {
+    transform: [{ scale: 0.98 }],
   },
-  arrowBubble: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  sidePillInner: {
+    minHeight: 104,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    backgroundColor: 'rgba(2, 6, 23, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: 'rgba(148,163,184,0.18)',
   },
-  btnArrow: {
-    color: 'white',
-    fontSize: 17,
-    fontWeight: '900',
+  sidePillLabel: {
+    color: '#f8fafc',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  buttonPressed: {
-    opacity: 0.88,
-  },
-  legal: {
+  sidePillHint: {
+    color: 'rgba(203,213,225,0.82)',
     fontSize: 11,
-    color: 'rgba(203, 213, 225, 0.7)',
-    textAlign: 'center',
-    marginTop: 6,
-  },
-  legalLink: {
-    color: '#34d399',
-    textDecorationLine: 'underline',
+    lineHeight: 15,
   },
 });

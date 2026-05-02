@@ -126,7 +126,7 @@ export default function LoginScreen() {
       setError(null);
       setIsLoading(true);
       await signIn(email, password);
-      router.replace('/(tabs)');
+      router.replace('/home');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);

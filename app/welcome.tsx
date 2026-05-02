@@ -1,249 +1,211 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import { useCallback, useEffect, useRef } from 'react';
+import { Link } from 'expo-router';
+import { useEffect, useRef } from 'react';
 import {
   Animated,
   Easing,
-  Image,
+  ImageBackground,
+  Pressable,
+  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
-import { useAuth } from '@/providers/auth-provider';
+function ActionButton({
+  href,
+  title,
+  subtitle,
+  colors,
+}: {
+  href: '/login' | '/register';
+  title: string;
+  subtitle: string;
+  colors: [string, string];
+}) {
+  return (
+    <Link href={href} asChild>
+      <Pressable style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}>
+        <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.buttonInner}>
+          <Text style={styles.buttonTitle}>{title}</Text>
+          <Text style={styles.buttonSubtitle}>{subtitle}</Text>
+        </LinearGradient>
+      </Pressable>
+    </Link>
+  );
+}
 
 export default function WelcomeScreen() {
-  const router      = useRouter();
-  const { session } = useAuth();
-  const isSignedIn  = !!session || process.env.EXPO_PUBLIC_BYPASS_AUTH === 'true';
-  const welcomeVideoSource = require('@/assets/images/videoVieux.mp4');
-  const hasRevealedRef = useRef(false);
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const slideUp = useRef(new Animated.Value(24)).current;
 
-  // ── expo-video player (HEAD) ─────────────────────────────────────────────
-  const player = useVideoPlayer(welcomeVideoSource, (p) => {
-    p.volume = 1.0;
-    p.muted  = false;
-    p.loop   = false;
-    p.play();
-  });
-
-  // ── Animation refs HEAD ───────────────────────────────────────────────────
-  const heroOpacity = useRef(new Animated.Value(0)).current;
-  const titleY      = useRef(new Animated.Value(24)).current;
-  const ctaOpacity  = useRef(new Animated.Value(0)).current;
-  const ctaY        = useRef(new Animated.Value(20)).current;
-  const tickerX     = useRef(new Animated.Value(0)).current;
-  const pulse       = useRef(new Animated.Value(0.85)).current;
-  const floatY      = useRef(new Animated.Value(0)).current;
-  const dotBlink    = useRef(new Animated.Value(0.4)).current;
-  const btnGlow     = useRef(new Animated.Value(0)).current;
-
-  const chestScale  = pulse.interpolate({ inputRange: [0.85, 1], outputRange: [0.97, 1.03] });
-  const floatAnim   = floatY.interpolate({ inputRange: [-10, 0], outputRange: [-10, 0] });
-  const glowOpacity = btnGlow.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.6] });
-  const freezeFaceMs = 350;
-
-  // ── Animation refs LOOT-27 ────────────────────────────────────────────────
-  const slideUp     = useRef(new Animated.Value(30)).current;
-  const fadeIn      = useRef(new Animated.Value(0)).current;
-  const bounceScale = useRef(new Animated.Value(0.8)).current;
-
-  // ── revealCta (HEAD) ──────────────────────────────────────────────────────
-  const revealCta = useCallback(() => {
+  useEffect(() => {
     Animated.parallel([
-      Animated.timing(ctaOpacity, {
+      Animated.timing(fadeIn, {
         toValue: 1,
-        duration: 450,
+        duration: 650,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-      Animated.timing(ctaY, {
+      Animated.timing(slideUp, {
         toValue: 0,
-        duration: 450,
+        duration: 650,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start();
-  }, [ctaOpacity, ctaY]);
-
-  // ── Fin de vidéo → freeze + revealCta (HEAD) ─────────────────────────────
-  useEffect(() => {
-    const sub = player.addListener('playToEnd', () => {
-      if (hasRevealedRef.current) return;
-      hasRevealedRef.current = true;
-      try {
-        player.currentTime = freezeFaceMs / 1000;
-        player.pause();
-      } catch {
-        // No-op
-      }
-      revealCta();
-    });
-    return () => sub.remove();
-  }, [player, revealCta, freezeFaceMs]);
-
-  // ── Animations d'entrée + redirect automatique (LOOT-27) ─────────────────
-  useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(fadeIn, {
-          toValue: 1,
-          duration: 500,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideUp, {
-          toValue: 0,
-          duration: 600,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.timing(bounceScale, {
-        toValue: 1,
-        duration: 400,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    const timer = setTimeout(() => {
-      if (isSignedIn) {
-        router.replace('/(tabs)');
-      } else {
-        router.replace('/(auth)/login');
-      }
-    }, 3500);
-
-    return () => clearTimeout(timer);
-  }, [router, isSignedIn]);
+  }, [fadeIn, slideUp]);
 
   return (
-    <View style={styles.root}>
-      {/* Image fallback (LOOT-27) — visible pendant le chargement de la vidéo */}
-      <Image
-        source={require('@/assets/images/PersoAccueil.webp')}
-        style={styles.bgMedia}
-        resizeMode="cover"
-      />
+    <ImageBackground
+      source={require('@/assets/images/PersoAccueil.webp')}
+      style={styles.root}
+      resizeMode="cover"
+    >
+      <View style={styles.overlay} />
+      <View style={[styles.glow, styles.glowLeft]} />
+      <View style={[styles.glow, styles.glowRight]} />
 
-      {/* Vidéo en plein écran (HEAD) — s'affiche par-dessus l'image dès qu'elle est prête */}
-      <View style={styles.bgMedia}>
-        <VideoView
-          player={player}
-          style={{ flex: 1 }}
-          contentFit="cover"
-          nativeControls={false}
-          allowsFullscreen={false}
-          allowsPictureInPicture={false}
-        />
-      </View>
-
-      {/* Overlay dégradé */}
-      <LinearGradient
-        colors={['rgba(2,5,16,0.40)', 'rgba(4,10,28,0.65)', 'rgba(6,14,38,0.85)']}
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Contenu splash (LOOT-27) */}
-      <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
         <Animated.View
           style={[
             styles.content,
             {
               opacity: fadeIn,
-              transform: [
-                { translateY: slideUp },
-                { scale: bounceScale },
-              ],
+              transform: [{ translateY: slideUp }],
             },
           ]}
         >
-          <View style={styles.heroText}>
-            <Text style={styles.title}>LOOTOPIA</Text>
-            <View style={styles.divider} />
+          <View style={styles.hero}>
+            <Text style={styles.badge}>LOOTOPIA</Text>
+            <Text style={styles.title}>Prêt à partir en chasse</Text>
             <Text style={styles.subtitle}>
-              Chasse au trésor • Indices • Récompenses réelles
+              Connecte-toi si tu as déjà un compte, ou crée-en un pour commencer ton aventure.
             </Text>
           </View>
 
-          <View style={styles.dots}>
-            <Animated.View style={[styles.dot, { opacity: 0.9 }]} />
-            <Animated.View style={[styles.dot, { opacity: 0.6, marginLeft: 8 }]} />
-            <Animated.View style={[styles.dot, { opacity: 0.3, marginLeft: 8 }]} />
+          <View style={styles.buttonsWrap}>
+            <ActionButton
+              href="/login"
+              title="Connexion"
+              subtitle="J'ai déjà un compte"
+              colors={['#10b981', '#047857']}
+            />
+            <ActionButton
+              href="/register"
+              title="Inscription"
+              subtitle="Créer un nouveau compte"
+              colors={['#06b6d4', '#0f766e']}
+            />
           </View>
-
-          <Text style={styles.loadingText}>Ouvre ton aventure...</Text>
         </Animated.View>
-      </View>
-    </View>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0b1220',
+    backgroundColor: '#060b14',
   },
-  bgMedia: {
+  overlay: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(6,11,20,0.58)',
   },
-  container: {
+  glow: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 999,
+    opacity: 0.2,
+  },
+  glowLeft: {
+    left: -70,
+    top: 130,
+    backgroundColor: '#10b981',
+  },
+  glowRight: {
+    right: -80,
+    top: 220,
+    backgroundColor: '#06b6d4',
+  },
+  safeArea: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
   },
   content: {
-    alignItems: 'center',
-    gap: 32,
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 24,
   },
-  heroText: {
-    alignItems: 'center',
+  hero: {
     gap: 12,
+    marginTop: 20,
+  },
+  badge: {
+    alignSelf: 'flex-start',
+    color: '#86efac',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(134,239,172,0.35)',
+    backgroundColor: 'rgba(15,23,42,0.65)',
   },
   title: {
-    fontSize: 56,
+    color: '#f8fafc',
+    fontSize: 34,
+    lineHeight: 40,
     fontWeight: '900',
-    color: '#f0f9ff',
-    letterSpacing: 4,
-    textShadowColor: 'rgba(52, 211, 153, 0.4)',
+    textShadowColor: 'rgba(16,185,129,0.3)',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 24,
-  },
-  divider: {
-    width: 120,
-    height: 3,
-    backgroundColor: '#34d399',
-    borderRadius: 2,
+    textShadowRadius: 20,
   },
   subtitle: {
+    color: 'rgba(226,232,240,0.9)',
     fontSize: 14,
-    color: 'rgba(186, 230, 253, 0.75)',
-    fontWeight: '500',
-    letterSpacing: 0.5,
     lineHeight: 20,
-    textAlign: 'center',
-    maxWidth: 260,
+    maxWidth: 330,
   },
-  dots: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  buttonsWrap: {
+    gap: 14,
+    paddingBottom: 10,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#34d399',
-    shadowColor: '#34d399',
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
+  button: {
+    borderRadius: 22,
+    overflow: 'hidden',
   },
-  loadingText: {
+  buttonPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  buttonInner: {
+    minHeight: 102,
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    shadowColor: '#10b981',
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  buttonTitle: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  buttonSubtitle: {
+    marginTop: 4,
+    color: 'rgba(240,253,250,0.82)',
     fontSize: 12,
-    color: 'rgba(148, 163, 184, 0.7)',
-    fontWeight: '600',
-    letterSpacing: 1,
+    lineHeight: 16,
   },
 });
