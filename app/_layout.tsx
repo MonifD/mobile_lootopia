@@ -40,24 +40,17 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       {/* Tous les écrans déclarés inconditionnellement — règle expo-router */}
-      <Stack>
-        <Stack.Screen name="splash" options={{ headerShown: false }} />
-        <Stack.Screen name="video" options={{ headerShown: false }} />
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="home" options={{ headerShown: false }} />
-        <Stack.Screen name="welcome" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="splash" />
+        <Stack.Screen name="video" />
+        <Stack.Screen name="index" />
+        <Stack.Screen name="home" />
+        <Stack.Screen name="welcome" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="hunts/[id]" options={{ title: 'Chasse' }} />
-        <Stack.Screen
-          name="hunt-map/[id]"
-          options={{
-            title: 'Carte de la chasse',
-            headerStyle: { backgroundColor: '#0f766e' },
-            headerTintColor: '#fff',
-            headerTitleStyle: { fontWeight: '700' },
-          }}
-        />
+        <Stack.Screen name="hunt-map/[id]" options={{ title: 'Carte de la chasse' }} />
+        <Stack.Screen name="ar-step/[id]" />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <AuthGuard />

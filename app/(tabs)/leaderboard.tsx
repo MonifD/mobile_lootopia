@@ -1,401 +1,659 @@
+import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
+    ActivityIndicator,
+    ImageBackground,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { useApiResource } from '@/hooks/use-api-resource';
-import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
 import type { LeaderboardEntry } from '@/types/game';
 
 const LEADERBOARD_MODES = [
-  { key: 'global',        label: 'Global' },
-  { key: 'weekly',        label: 'Hebdo' },
-  { key: 'monthly',       label: 'Mensuel' },
-  { key: 'by-hunts',      label: 'Par chasses' },
-  { key: 'by-streak',     label: 'Par série' },
-  { key: 'weekly-stars',  label: 'Stars' },
-  { key: 'local',         label: '📍 Ma ville' },
+  { key: 'global', label: '🌍 Global' },
+  { key: 'weekly', label: '📅 Hebdo' },
+  { key: 'monthly', label: '🗓️ Mensuel' },
 ] as const;
 
 type LeaderboardMode = (typeof LEADERBOARD_MODES)[number]['key'];
 
 const standardLoaders: Partial<Record<LeaderboardMode, () => Promise<LeaderboardEntry[]>>> = {
-  global:       () => lootopiaApi.getLeaderboardGlobal(),
-  weekly:       () => lootopiaApi.getLeaderboardWeekly(),
-  monthly:      () => lootopiaApi.getLeaderboardMonthly(),
-  'by-hunts':   () => lootopiaApi.getLeaderboardByHunts(),
-  'by-streak':  () => lootopiaApi.getLeaderboardByStreak(),
-  'weekly-stars': () => lootopiaApi.getLeaderboardWeeklyStars(),
+  global: () => lootopiaApi.getLeaderboardGlobal(),
+  weekly: () => lootopiaApi.getLeaderboardWeekly(),
+  monthly: () => lootopiaApi.getLeaderboardMonthly(),
 };
 
+function GoldFrame({ children, style }: { children: React.ReactNode; style?: object }) {
+  return (
+    <LinearGradient colors={['#fff3a3', '#f59e0b', '#7c2d12']} style={[styles.goldFrame, style]}>
+      <View style={styles.goldFrameInner}>{children}</View>
+    </LinearGradient>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  color,
+}: {
+  icon: string;
+  label: string;
+  value: string | number;
+  color: string;
+}) {
+  return (
+    <LinearGradient colors={['#fff3a3', '#f59e0b', '#7c2d12']} style={styles.statBorder}>
+      <LinearGradient colors={[color, '#102018']} style={styles.statCard}>
+        <View style={styles.cardGloss} />
+        <Text style={styles.statIcon}>{icon}</Text>
+        <Text style={styles.statValue}>{value}</Text>
+        <Text style={styles.statLabel}>{label}</Text>
+      </LinearGradient>
+    </LinearGradient>
+  );
+}
+
 export default function LeaderboardScreen() {
-  const { session } = useAuth();
+  const router = useRouter();
 
   const [mode, setMode] = useState<LeaderboardMode>('global');
 
-  // ── Classement local ─────────────────────────────────────────────────────
-  const [cityInput, setCityInput] = useState(session ? '' : '');
-  const [activeCity, setActiveCity] = useState<string | null>(null);
-
   const loadEntries = useCallback(() => {
-    if (mode === 'local') {
-      const city = activeCity ?? '';
-      if (!city.trim()) return Promise.resolve([] as LeaderboardEntry[]);
-      return lootopiaApi.getLeaderboardLocal(city.trim());
-    }
     return standardLoaders[mode]!();
-  }, [mode, activeCity]);
+  }, [mode]);
 
   const loadMyRank = useCallback(() => lootopiaApi.getMyRank(), []);
-  const loadStats  = useCallback(() => lootopiaApi.getLeaderboardStats(), []);
+  const loadLeaderboardStats = useCallback(() => lootopiaApi.getLeaderboardStats(), []);
 
   const entriesState = useApiResource(loadEntries);
-  const myRankState  = useApiResource(loadMyRank);
-  const statsState   = useApiResource(loadStats);
+  const myRankState = useApiResource(loadMyRank);
+  const statsState = useApiResource(loadLeaderboardStats);
 
-  const topThree = useMemo(() => (entriesState.data ?? []).slice(0, 3), [entriesState.data]);
+  const { refresh: refreshEntries } = entriesState;
+  const { refresh: refreshMyRank } = myRankState;
+  const { refresh: refreshStats } = statsState;
 
-  const switchMode = (key: LeaderboardMode) => {
-    setMode(key);
-    if (key === 'local' && !activeCity) {
-      // pré-remplit avec la ville du profil si dispo
-      const profileCity = (session as unknown as { city?: string } | null)?.city ?? '';
-      setCityInput(profileCity);
-    }
-  };
+  useFocusEffect(
+    useCallback(() => {
+      void refreshEntries();
+      void refreshMyRank();
+      void refreshStats();
+    }, [refreshEntries, refreshMyRank, refreshStats])
+  );
 
-  const searchLocal = () => {
-    const city = cityInput.trim();
-    if (!city) return;
-    setActiveCity(city);
-  };
+  const entries = entriesState.data ?? [];
+  const topThree = useMemo(() => entries.slice(0, 3), [entries]);
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <ImageBackground
+      source={require('@/assets/images/foret.jpg')}
+      style={styles.root}
+      resizeMode="cover"
+    >
+      <View style={styles.overlay} />
 
-        {/* Hero */}
-        <View style={styles.heroCard}>
-          <ThemedText style={styles.kicker}>Compétition</ThemedText>
-          <ThemedText type="title" style={styles.title}>Classement</ThemedText>
-          <ThemedText style={styles.subtitle}>
-            Compare tes points et grimpe dans le top des chasseurs.
-          </ThemedText>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.topBar}>
+          <Pressable onPress={() => router.replace('/(tabs)')} style={styles.iconButton}>
+            <Text style={styles.iconButtonText}>‹</Text>
+          </Pressable>
+
+          <View style={styles.titleWrap}>
+            <Text style={styles.pageTitle}>CLASSEMENT</Text>
+            <Text style={styles.pageSubtitle}>DES CHASSEURS</Text>
+          </View>
+
+          <Pressable onPress={() => void entriesState.refresh()} style={styles.iconButton}>
+            <Text style={styles.settingsIcon}>↻</Text>
+          </Pressable>
         </View>
 
-        {/* Filtres */}
+        {entriesState.loading ? <ActivityIndicator color="#facc15" /> : null}
+
+        {entriesState.error ? (
+          <Text style={styles.error}>Erreur : {entriesState.error}</Text>
+        ) : null}
+
+        <GoldFrame>
+          <Text style={styles.heroLogo}>💰 LOOTOPIA</Text>
+          <Text style={styles.heroTitle}>COMPÉTITION</Text>
+          <Text style={styles.heroText}>
+            Compare tes points, grimpe dans le top et deviens une légende Lootopia.
+          </Text>
+        </GoldFrame>
+
         <View style={styles.filters}>
           {LEADERBOARD_MODES.map((item) => {
             const selected = item.key === mode;
+
             return (
               <Pressable
                 key={item.key}
-                style={[styles.filterChip, selected && styles.filterChipActive]}
-                onPress={() => switchMode(item.key)}
+                onPress={() => setMode(item.key)}
+                style={({ pressed }) => [pressed && styles.pressed]}
               >
-                <ThemedText style={selected ? styles.filterTextActive : styles.filterText}>
-                  {item.label}
-                </ThemedText>
+                <LinearGradient
+                  colors={
+                    selected
+                      ? ['#fff3a3', '#f59e0b', '#7c2d12']
+                      : ['#d6a75d', '#b7791f', '#78350f']
+                  }
+                  style={styles.filterBorder}
+                >
+                  <View style={[styles.filterChip, selected && styles.filterChipActive]}>
+                    <Text style={selected ? styles.filterTextActive : styles.filterText}>
+                      {item.label}
+                    </Text>
+                  </View>
+                </LinearGradient>
               </Pressable>
             );
           })}
         </View>
 
-        {/* Saisie ville pour le mode local */}
-        {mode === 'local' ? (
-          <View style={styles.cityRow}>
-            <TextInput
-              style={styles.cityInput}
-              value={cityInput}
-              onChangeText={setCityInput}
-              placeholder="Nom de la ville…"
-              placeholderTextColor="#64748b"
-              returnKeyType="search"
-              onSubmitEditing={searchLocal}
-              autoCapitalize="words"
-            />
-            <Pressable style={styles.citySearchBtn} onPress={searchLocal}>
-              <ThemedText style={styles.citySearchText}>Chercher</ThemedText>
-            </Pressable>
-          </View>
+        {topThree.length > 0 ? (
+          <GoldFrame>
+            <Text style={styles.sectionTitle}>PODIUM</Text>
+
+            <View style={styles.podium}>
+              {topThree.map((entry, index) => {
+                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉';
+
+                return (
+                  <LinearGradient
+                    key={entry.id}
+                    colors={
+                      index === 0
+                        ? ['#92400e', '#3f2307']
+                        : index === 1
+                          ? ['#374151', '#111827']
+                          : ['#7c2d12', '#241607']
+                    }
+                    style={[styles.podiumCard, index === 0 && styles.podiumFirst]}
+                  >
+                    <View style={styles.cardGloss} />
+                    <Text style={styles.medal}>{medal}</Text>
+
+                    <View style={styles.avatarCircle}>
+                      <Text style={styles.avatarText}>
+                        {entry.username?.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.podiumName} numberOfLines={1}>
+                      {entry.username}
+                    </Text>
+
+                    <Text style={styles.podiumPoints}>{entry.totalPoints} pts</Text>
+                  </LinearGradient>
+                );
+              })}
+            </View>
+          </GoldFrame>
         ) : null}
 
-        {/* Stats globales */}
-        <View style={styles.statsRow}>
-          <View style={styles.statsCard}>
-            <ThemedText style={styles.statValue}>{statsState.data?.totalPlayers ?? '-'}</ThemedText>
-            <ThemedText style={styles.statLabel}>Joueurs</ThemedText>
-          </View>
-          <View style={styles.statsCard}>
-            <ThemedText style={styles.statValue}>{myRankState.data?.rank ?? '-'}</ThemedText>
-            <ThemedText style={styles.statLabel}>Mon rang</ThemedText>
-          </View>
-          <View style={styles.statsCard}>
-            <ThemedText style={styles.statValue}>{statsState.data?.averagePoints ?? '-'}</ThemedText>
-            <ThemedText style={styles.statLabel}>Moy. pts</ThemedText>
-          </View>
+        <View style={styles.statsGrid}>
+          <StatCard
+            icon="👥"
+            label="JOUEURS"
+            value={statsState.data?.totalPlayers ?? '-'}
+            color="#6b0f0f"
+          />
+
+          <StatCard
+            icon="🏴‍☠️"
+            label="MON RANG"
+            value={`#${myRankState.data?.rank ?? '-'}`}
+            color="#5a3708"
+          />
+
+          <StatCard
+            icon="📊"
+            label="MOY. PTS"
+            value={statsState.data?.averagePoints ?? '-'}
+            color="#064e3b"
+          />
         </View>
 
-        {/* État : chargement / erreur / invite ville */}
-        {entriesState.loading ? <ActivityIndicator color="#34d399" /> : null}
-        {entriesState.error ? (
-          <ThemedText style={styles.error}>Erreur : {entriesState.error}</ThemedText>
-        ) : null}
-        {mode === 'local' && !activeCity ? (
-          <View style={styles.emptyCard}>
-            <ThemedText style={styles.emptyText}>
-              Entre le nom d'une ville pour voir le classement local.
-            </ThemedText>
-          </View>
-        ) : null}
 
-        {/* Podium top 3 */}
-        {topThree.length > 0 ? (
-          <View style={styles.podium}>
-            {topThree.map((entry, index) => (
-              <View
-                key={entry.id}
-                style={[styles.podiumCard, index === 0 && styles.gold]}
+        {mode === 'global' && entries.length > 0 ? (
+          <View style={styles.entriesSection}>
+            <Text style={styles.sectionTitle}>CLASSEMENT GLOBAL</Text>
+
+            {entries.map((entry, index) => (
+              <LinearGradient
+                key={`${entry.id}-${index}`}
+                colors={['#fff3a3', '#f59e0b', '#7c2d12']}
+                style={styles.entryBorder}
               >
-                <ThemedText type="defaultSemiBold" style={styles.whiteText}>
-                  #{index + 1} {entry.username}
-                </ThemedText>
-                <ThemedText style={styles.points}>{entry.totalPoints} pts</ThemedText>
-              </View>
+                <LinearGradient colors={['#08261e', '#102018']} style={styles.entryCard}>
+                  <View style={styles.rankBadge}>
+                    <Text style={styles.rank}>#{entry.rank ?? index + 1}</Text>
+                  </View>
+
+                  <View style={styles.entryAvatar}>
+                    <Text style={styles.entryAvatarText}>
+                      {entry.username?.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+
+                  <View style={styles.entryMain}>
+                    <Text style={styles.entryName}>{entry.username}</Text>
+
+                    <Text style={styles.entryMeta} numberOfLines={2}>
+                      {entry.city ? `📍 ${entry.city}  •  ` : ''}
+                      🗺️ {entry.completedHunts} chasses  •  🔥 {entry.loginStreak}
+                    </Text>
+                  </View>
+
+                  <View style={styles.pointsBadge}>
+                    <Text style={styles.entryPoints}>🏆</Text>
+                    <Text style={styles.entryPointsValue}>{entry.totalPoints}</Text>
+                  </View>
+                </LinearGradient>
+              </LinearGradient>
             ))}
           </View>
         ) : null}
 
-        {/* Classement complet */}
-        {(entriesState.data ?? []).map((entry, index) => (
-          <View key={`${entry.id}-${index}`} style={styles.entryCard}>
-            <ThemedText style={styles.rank}>#{entry.rank ?? index + 1}</ThemedText>
-            <View style={styles.entryMain}>
-              <ThemedText type="defaultSemiBold" style={styles.whiteText}>
-                {entry.username}
-              </ThemedText>
-              <ThemedText style={styles.entryMeta}>
-                {entry.level} • {entry.completedHunts} chasses • série {entry.loginStreak}
-                {entry.city ? ` • ${entry.city}` : ''}
-              </ThemedText>
-            </View>
-            <ThemedText style={styles.entryPoints}>{entry.totalPoints}</ThemedText>
+        {entries.length > 3 ? (
+          <View style={styles.scrollPanel}>
+            <Text style={styles.scrollTitle}>DÉFI DU JOUR</Text>
+            <Text style={styles.scrollText}>
+              💰 Continue ta chasse pour dépasser le prochain joueur.
+            </Text>
           </View>
-        ))}
+        ) : null}
 
-        <Pressable style={styles.refreshButton} onPress={() => void entriesState.refresh()}>
-          <ThemedText style={styles.refreshText}>Rafraîchir</ThemedText>
+        <Pressable onPress={() => void entriesState.refresh()} style={({ pressed }) => pressed && styles.pressed}>
+          <LinearGradient colors={['#fff3a3', '#f59e0b', '#7c2d12']} style={styles.refreshBorder}>
+            <LinearGradient colors={['#065f46', '#132018']} style={styles.refreshButton}>
+              <Text style={styles.refreshText}>🧭 RAFRAÎCHIR</Text>
+            </LinearGradient>
+          </LinearGradient>
         </Pressable>
       </ScrollView>
-    </ThemedView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#0b1220',
+    backgroundColor: '#06100a',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.38)',
   },
   content: {
-    gap: 12,
     padding: 16,
-    paddingBottom: 28,
-  },
-  heroCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(30,41,59,0.86)',
-    padding: 16,
-    gap: 6,
-  },
-  kicker: {
-    color: '#34d399',
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    fontWeight: '700',
-  },
-  title: {
-    color: '#f8fafc',
-  },
-  subtitle: {
-    color: '#ffffff',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  error: {
-    color: '#fda4af',
-    fontSize: 13,
-  },
-  whiteText: {
-    color: '#ffffff',
+    paddingTop: 48,
+    paddingBottom: 36,
+    gap: 14,
   },
 
-  // Filtres
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  iconButton: {
+    width: 54,
+    height: 54,
+    borderRadius: 14,
+    backgroundColor: '#1f160c',
+    borderWidth: 3,
+    borderColor: '#d97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconButtonText: {
+    color: '#fef3c7',
+    fontSize: 42,
+    fontWeight: '900',
+    lineHeight: 42,
+  },
+  settingsIcon: {
+    color: '#fef3c7',
+    fontSize: 30,
+    fontWeight: '900',
+  },
+  titleWrap: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  pageTitle: {
+    color: '#facc15',
+    fontSize: 32,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    textShadowColor: '#78350f',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 2,
+  },
+  pageSubtitle: {
+    marginTop: -2,
+    color: '#bbf7d0',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+
+  error: {
+    color: '#fecaca',
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+
+  goldFrame: {
+    borderRadius: 24,
+    padding: 4,
+    shadowColor: '#facc15',
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  goldFrameInner: {
+    borderRadius: 20,
+    backgroundColor: 'rgba(8,38,30,0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    padding: 14,
+  },
+
+  heroLogo: {
+    color: '#facc15',
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 1.5,
+  },
+  heroTitle: {
+    marginTop: 8,
+    color: '#fff7ed',
+    fontSize: 26,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  heroText: {
+    marginTop: 8,
+    color: '#fde68a',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+
   filters: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
+  filterBorder: {
+    borderRadius: 14,
+    padding: 3,
+  },
   filterChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.45)',
-    backgroundColor: 'rgba(30,41,59,0.78)',
+    borderRadius: 11,
+    backgroundColor: '#d6a75d',
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   filterChipActive: {
-    backgroundColor: '#0f766e',
-    borderColor: '#0f766e',
+    backgroundColor: '#14532d',
   },
   filterText: {
+    color: '#3f2307',
     fontSize: 12,
-    color: '#cbd5e1',
+    fontWeight: '900',
   },
   filterTextActive: {
+    color: '#fef3c7',
     fontSize: 12,
-    color: '#fff',
-    fontWeight: '600',
+    fontWeight: '900',
   },
 
-  // Saisie ville
-  cityRow: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
-  cityInput: {
-    flex: 1,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.35)',
-    backgroundColor: 'rgba(15,23,42,0.7)',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    color: '#f8fafc',
-    fontSize: 14,
-  },
-  citySearchBtn: {
-    borderRadius: 10,
-    backgroundColor: '#0f766e',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  citySearchText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-
-  // Stats
-  statsRow: {
+  statsGrid: {
     flexDirection: 'row',
     gap: 8,
   },
-  statsCard: {
+  statBorder: {
     flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(30,41,59,0.82)',
-    padding: 10,
+    borderRadius: 18,
+    padding: 3,
+  },
+  statCard: {
+    minHeight: 116,
+    borderRadius: 15,
+    padding: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  cardGloss: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    right: 8,
+    height: 22,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  statIcon: {
+    fontSize: 26,
+    marginBottom: 4,
   },
   statValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#f8fafc',
+    color: '#fff7ed',
+    fontSize: 21,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   statLabel: {
-    fontSize: 12,
-    color: '#ffffff',
-  },
-
-  // Invite vide
-  emptyCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.2)',
-    backgroundColor: 'rgba(30,41,59,0.65)',
-    padding: 14,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: '#94a3b8',
-    fontSize: 13,
+    color: '#facc15',
+    fontSize: 10,
+    fontWeight: '900',
     textAlign: 'center',
   },
 
-  // Podium
+  emptyText: {
+    color: '#fde68a',
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+
+  sectionTitle: {
+    color: '#facc15',
+    fontSize: 18,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 12,
+    letterSpacing: 1,
+  },
   podium: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     gap: 8,
   },
   podiumCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(30,41,59,0.82)',
+    flex: 1,
+    minHeight: 148,
+    borderRadius: 18,
     padding: 10,
-    gap: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
-  gold: {
-    borderColor: '#f59e0b',
-    backgroundColor: 'rgba(146,64,14,0.35)',
+  podiumFirst: {
+    minHeight: 178,
   },
-  points: {
-    fontWeight: '700',
-    color: '#b45309',
+  medal: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  avatarCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 999,
+    borderWidth: 3,
+    borderColor: '#facc15',
+    backgroundColor: '#123b36',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: '#facc15',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  podiumName: {
+    marginTop: 8,
+    color: '#fff7ed',
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  podiumPoints: {
+    marginTop: 4,
+    color: '#fde68a',
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'center',
   },
 
-  // Lignes
-  entryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(30,41,59,0.82)',
-    padding: 10,
+  entriesSection: {
     gap: 10,
   },
+
+  entryBorder: {
+    borderRadius: 18,
+    padding: 3,
+  },
+  entryCard: {
+    minHeight: 76,
+    borderRadius: 15,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  rankBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#241607',
+    borderWidth: 2,
+    borderColor: '#d97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rank: {
-    width: 36,
-    textAlign: 'center',
-    fontWeight: '700',
-    color: '#f8fafc',
+    color: '#fef3c7',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  entryAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    borderWidth: 3,
+    borderColor: '#facc15',
+    backgroundColor: '#123b36',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  entryAvatarText: {
+    color: '#facc15',
+    fontSize: 18,
+    fontWeight: '900',
   },
   entryMain: {
     flex: 1,
-    gap: 2,
+    gap: 3,
+  },
+  entryName: {
+    color: '#fff7ed',
+    fontSize: 16,
+    fontWeight: '900',
   },
   entryMeta: {
-    fontSize: 12,
-    color: '#ffffff',
-  },
-  entryPoints: {
+    color: '#fde68a',
+    fontSize: 11,
     fontWeight: '700',
-    fontSize: 16,
-    color: '#f8fafc',
+    lineHeight: 16,
   },
-
-  refreshButton: {
-    borderRadius: 8,
-    backgroundColor: '#1e293b',
-    paddingVertical: 10,
+  pointsBadge: {
+    minWidth: 62,
+    borderRadius: 12,
+    backgroundColor: '#241607',
+    borderWidth: 2,
+    borderColor: '#d97706',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     alignItems: 'center',
   },
+  entryPoints: {
+    fontSize: 15,
+  },
+  entryPointsValue: {
+    color: '#fef3c7',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  scrollPanel: {
+    borderRadius: 18,
+    backgroundColor: '#d6a75d',
+    borderWidth: 3,
+    borderColor: '#8b5a2b',
+    padding: 16,
+    alignItems: 'center',
+  },
+  scrollTitle: {
+    color: '#3f2307',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  scrollText: {
+    marginTop: 6,
+    color: '#2f1703',
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+
+  refreshBorder: {
+    borderRadius: 18,
+    padding: 3,
+  },
+  refreshButton: {
+    minHeight: 64,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   refreshText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: '#fff7ed',
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+
+  pressed: {
+    transform: [{ scale: 0.97 }, { translateY: 2 }],
   },
 });

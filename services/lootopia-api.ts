@@ -11,6 +11,7 @@ import type {
     Step,
     UserRank,
 } from '@/types/game';
+import { Platform } from 'react-native';
 
 const FALLBACK_API_URL = 'http://10.0.2.2:8080/api';
 
@@ -78,8 +79,16 @@ function unwrapCollection<T>(payload: unknown): T[] {
     return data as T[];
   }
 
-  if (data && typeof data === 'object' && 'hydra:member' in data) {
-    return ((data as HydraCollection<T>)['hydra:member'] ?? []) as T[];
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+
+    if ('hydra:member' in obj) {
+      return (obj['hydra:member'] as T[]) ?? [];
+    }
+
+    if ('member' in obj) {
+      return (obj['member'] as T[]) ?? [];
+    }
   }
 
   return [];
@@ -101,6 +110,29 @@ function toString(value: unknown, fallback = ''): string {
 
 function toNullableString(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
+}
+
+function parseResourceId(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const direct = Number(value);
+    if (Number.isFinite(direct)) {
+      return direct;
+    }
+
+    const iriMatch = value.match(/\/(\d+)$/);
+    if (iriMatch) {
+      const iriId = Number(iriMatch[1]);
+      if (Number.isFinite(iriId)) {
+        return iriId;
+      }
+    }
+  }
+
+  return null;
 }
 
 function decodeBase64Url(input: string): string | null {
@@ -157,6 +189,19 @@ function parseUserIriToId(value: unknown): number | null {
   return toNullableNumber(iriMatch[1]);
 }
 
+function parseStepIriToId(value: unknown): number | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const iriMatch = value.match(/\/steps\/(\d+)$/);
+  if (!iriMatch) {
+    return null;
+  }
+
+  return toNullableNumber(iriMatch[1]);
+}
+
 function extractIdentityFromToken(token: string | null | undefined): Partial<LoginIdentity> {
   const payload = parseJwtPayload(token);
   if (!payload) {
@@ -191,16 +236,42 @@ function extractIdentityFromToken(token: string | null | undefined): Partial<Log
 
 function normalizeLeaderboardEntry(raw: unknown, index: number): LeaderboardEntry {
   const source = (raw ?? {}) as PrimitiveRecord;
+  const user = source.user as PrimitiveRecord | undefined;
 
   return {
     id: toNumber(source.id, index + 1),
-    username: toString(source.username || source.userName || source.name, 'Joueur'),
-    city: toNullableString(source.city),
+
+    username: toString(
+      source.username ||
+      source.userName ||
+      source.name ||
+      user?.username,
+      'Joueur'
+    ),
+
+    city: toNullableString(source.city ?? user?.city),
+
     level: toString(source.level, 'BRONZE'),
-    totalPoints: toNumber(source.totalPoints || source.points),
-    completedHunts: toNumber(source.completedHunts || source.huntsCompleted),
-    loginStreak: toNumber(source.loginStreak || source.streak),
-    rank: source.rank != null ? toNumber(source.rank) : index + 1,
+
+    totalPoints: toNumber(
+      source.totalPoints ??
+      source.points ??
+      source.score
+    ),
+
+    completedHunts: toNumber(
+      source.completedHunts ??
+      source.huntsCompleted
+    ),
+
+    loginStreak: toNumber(
+      source.loginStreak ??
+      source.streak
+    ),
+
+    rank: source.rank != null
+      ? toNumber(source.rank)
+      : index + 1,
   };
 }
 
@@ -263,6 +334,12 @@ function normalizeStep(raw: unknown, index: number): Step {
   };
 }
 
+function isStepFromHunt(step: Step, huntId: number): boolean {
+  if (!step.hunt) return false;
+
+  return step.hunt === `/api/hunts/${huntId}` || step.hunt.endsWith(`/${huntId}`);
+}
+
 function normalizeHunt(raw: unknown): Hunt {
   const source = (raw ?? {}) as PrimitiveRecord;
 
@@ -278,8 +355,13 @@ function normalizeHunt(raw: unknown): Hunt {
       ? true  // champ absent = valeur par défaut de l'entité PHP (true)
       : isActiveRaw === true || isActiveRaw === 1 || isActiveRaw === 'true' || isActiveRaw === '1';
 
+  const id =
+    parseResourceId(source.id) ??
+    parseResourceId(source['@id']) ??
+    0;
+
   return {
-    id: toNumber(source.id),
+    id,
     title: toString(source.title),
     description: toNullableString(source.description),
     city: toNullableString(source.city),
@@ -469,9 +551,21 @@ export const lootopiaApi = {
       body: JSON.stringify(data),
     }),
 
-  uploadAvatar: (userId: number, imageUri: string, mimeType: string, fileName: string) => {
+  uploadAvatar: async (userId: number, imageUri: string, mimeType: string, fileName: string) => {
     const formData = new FormData();
-    formData.append('avatar', { uri: imageUri, type: mimeType, name: fileName } as unknown as Blob);
+
+    // Sur le web, il faut convertir l'URI en Blob/File
+    if (Platform.OS === 'web') {
+      const resp = await fetch(imageUri);
+      const blob = await resp.blob();
+      // File est disponible dans les environnements web
+      const file = new File([blob], fileName, { type: mimeType });
+      formData.append('avatar', file as unknown as Blob);
+    } else {
+      // React Native / Expo mobile: forme attendue par fetch RN
+      formData.append('avatar', { uri: imageUri, type: mimeType, name: fileName } as unknown as Blob);
+    }
+
     return requestMultipart<{ avatarUrl: string }>(`/users/${userId}/avatar`, formData);
   },
 
@@ -489,46 +583,65 @@ export const lootopiaApi = {
 
   getAchievements: () => request<unknown>('/achievements').then((payload) => unwrapCollection<Achievement>(payload)),
 
+  // getHunts: () =>
+  //   request<unknown>('/hunts').then((payload) =>
+  //     unwrapCollection<unknown>(payload).map(normalizeHunt)
+  //   ),
+
   getHunts: () =>
-    request<unknown>('/hunts').then((payload) =>
-      unwrapCollection<unknown>(payload).map(normalizeHunt)
-    ),
+  request<unknown>('/hunts').then((payload) =>
+    unwrapCollection<unknown>(payload).map(normalizeHunt)
+  ),
+
+  // getHunt: (huntId: number) =>
+  //   request<unknown>(`/hunts/${huntId}`).then(normalizeHunt),
 
   getHunt: (huntId: number) =>
-    request<unknown>(`/hunts/${huntId}`).then(normalizeHunt),
+  request<unknown>(`/hunts/${huntId}`).then((payload) => {
+    console.log('HUNT API =', payload);
+    return normalizeHunt(payload);
+  }),
 
-  /**
-   * Récupère les étapes d'une chasse.
-   * Essaie d'abord le filtre IRI (nécessite SearchFilter côté backend).
-   * Si aucun résultat, récupère toutes les étapes et filtre côté client.
-   */
   getHuntSteps: async (huntId: number): Promise<Step[]> => {
-    // Tentative avec le filtre IRI API Platform
     try {
-      const payload = await request<unknown>(`/steps?hunt=/api/hunts/${huntId}&itemsPerPage=200`);
-      const items = unwrapCollection<unknown>(payload);
+      const payload = await request<unknown>(
+        `/steps?hunt=/api/hunts/${huntId}&itemsPerPage=200`
+      );
+
+      const items = unwrapCollection<unknown>(payload)
+        .map((s, i) => normalizeStep(s, i))
+        .filter((s) => isStepFromHunt(s, huntId))
+        .sort((a, b) => a.orderNumber - b.orderNumber);
+
       if (items.length > 0) {
-        return items.map((s, i) => normalizeStep(s, i));
+        return items;
       }
     } catch {
-      // Le filtre n'est pas supporté, on passe au fallback
+      // filtre non supporté → fallback
     }
 
-    // Fallback : récupère toutes les étapes et filtre côté client
     const fallbackPayload = await request<unknown>('/steps?itemsPerPage=200');
+
     return unwrapCollection<unknown>(fallbackPayload)
       .map((s, i) => normalizeStep(s, i))
-      .filter((s) => {
-        if (!s.hunt) return false;
-        // Vérifie que l'IRI correspond à la chasse demandée
-        return s.hunt === `/api/hunts/${huntId}` || s.hunt.endsWith(`/${huntId}`);
-      });
+      .filter((s) => isStepFromHunt(s, huntId))
+      .sort((a, b) => a.orderNumber - b.orderNumber);
   },
 
   getAchievementsForUser: (userId: number) =>
     request<unknown>(`/users/${userId}/achievements`).then((payload) => unwrapCollection<Achievement>(payload)),
 
-  getAchievementsForCurrentUser: () => requestCollectionWithFallback<Achievement>(['/achievements']),
+  // getAchievementsForCurrentUser: () => requestCollectionWithFallback<Achievement>(['/achievements']),
+  getAchievementsForCurrentUser: () => {
+  const identity = extractIdentityFromToken(bearerToken);
+
+  if (!identity.id) {
+    throw new Error("Impossible de charger tes achievements sans userId.");
+  }
+
+  return request<unknown>(`/users/${identity.id}/achievements`)
+    .then((payload) => unwrapCollection<Achievement>(payload));
+},
 
   getLeaderboardGlobal: () => request<unknown>('/leaderboard/global').then((payload) => normalizeLeaderboard(payload)),
 
@@ -551,11 +664,31 @@ export const lootopiaApi = {
   getHuntReviews: (huntId: number) =>
     request<unknown>(`/hunts/${huntId}/reviews`).then((payload) => unwrapCollection<unknown>(payload).map(normalizeReview)),
 
-  postHuntReview: (huntId: number, payload: { userId: number; rating: number; comment: string }) =>
+  postHuntReview: (huntId: number, payload: { userId: number; rating: number; comment: string , huntCompletedAt?: string;}) =>
     request<HuntReview>(`/hunts/${huntId}/reviews`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+    
+  completeStep: async (userId: number, stepId: number, pointsEarned = 0) => {
+    const participations = await lootopiaApi.getMyParticipations(userId);
+    const existing = participations.find(
+      (participation) => parseStepIriToId(participation.step) === stepId
+    );
+
+    if (existing) {
+      return existing;
+    }
+
+    return request<Participation>('/participations', {
+      method: 'POST',
+      body: JSON.stringify({
+        user: `/api/users/${userId}`,
+        step: `/api/steps/${stepId}`,
+        pointsEarned,
+      }),
+    });
+  },
 
   getHuntReviewStats: (huntId: number) =>
     request<unknown>(`/hunts/${huntId}/reviews/stats`).then((payload) => normalizeReviewStats(payload)),
@@ -573,9 +706,41 @@ export const lootopiaApi = {
    * Endpoint: GET /participations?user=/api/users/{id}
    * Chaque participation contient l'IRI de l'étape et la date de complétion.
    */
-  getMyParticipations: (userId: number) =>
-    request<unknown>(`/participations?user=/api/users/${userId}&itemsPerPage=200`)
-      .then((payload) => unwrapCollection<Participation>(payload)),
+ getMyParticipations: async (userId: number): Promise<Participation[]> => {
+  const keepOnlyCurrentUser = (
+    participations: Participation[]
+  ) =>
+    participations.filter((participation) => {
+      const user = participation.user;
+
+      if (typeof user !== 'string') {
+        return false;
+      }
+
+      return (
+        user === `/api/users/${userId}` ||
+        user.endsWith(`/${userId}`)
+      );
+    });
+
+  try {
+    const payload = await request<unknown>(
+      `/participations?user=/api/users/${userId}&itemsPerPage=200`
+    );
+
+    const items = unwrapCollection<Participation>(payload);
+
+    return keepOnlyCurrentUser(items);
+  } catch {
+    const fallbackPayload = await request<unknown>(
+      '/participations?itemsPerPage=200'
+    );
+
+    return keepOnlyCurrentUser(
+      unwrapCollection<Participation>(fallbackPayload)
+    );
+  }
+},
 };
 
 export function createSessionFromLogin(

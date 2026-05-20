@@ -1,27 +1,130 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  ImageBackground,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { AppHeader } from '@/components/app-header';
 import { useApiResource } from '@/hooks/use-api-resource';
 import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
 import type { Hunt } from '@/types/game';
 
+type FilterMode = 'my-city' | 'all';
+
 function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('fr-FR');
+  return new Date(dateString).toLocaleDateString('fr-FR');
 }
 
-type FilterMode = 'all' | 'my-city';
+function GameBackground({ children }: { children: React.ReactNode }) {
+  return (
+    <ImageBackground
+      source={require('@/assets/images/ancient-tree-life-bridge-serene-river.jpg')}
+      style={styles.container}
+      imageStyle={styles.bgImage}
+      resizeMode="cover"
+    >
+      <View style={styles.bgOverlay} />
+
+      <View style={[styles.glowBlob, styles.glowEmerald]} />
+      <View style={[styles.glowBlob, styles.glowCyan]} />
+      <View style={[styles.glowBlob, styles.glowGold]} />
+
+      {children}
+    </ImageBackground>
+  );
+}
+
+function GoldFrame({ children, style }: { children: React.ReactNode; style?: object }) {
+  return (
+    <LinearGradient
+      colors={['#fff3a3', '#f59e0b', '#7c2d12']}
+      style={[styles.goldFrame, style]}
+    >
+      <View style={styles.goldFrameInner}>{children}</View>
+    </LinearGradient>
+  );
+}
+
+function HuntCard({ hunt, onPress }: { hunt: Hunt; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
+      <GoldFrame style={!hunt.isActive ? styles.inactiveFrame : undefined}>
+        <View style={styles.huntTop}>
+          <View style={styles.huntIconBox}>
+            <Text style={styles.huntIcon}>{hunt.isActive ? '🗺️' : '🔒'}</Text>
+          </View>
+
+          <View style={styles.huntTitleWrap}>
+            <Text style={styles.huntTitle} numberOfLines={2}>
+              {hunt.title}
+            </Text>
+
+            <Text style={styles.huntMeta} numberOfLines={1}>
+              📍 {hunt.city ?? 'Ville mystère'} · Créée le {formatDate(hunt.createdAt)}
+            </Text>
+          </View>
+
+          <View style={[styles.statusBadge, hunt.isActive ? styles.statusActive : styles.statusInactive]}>
+            <Text style={styles.statusText}>{hunt.isActive ? 'ACTIVE' : 'LOCK'}</Text>
+          </View>
+        </View>
+
+        {hunt.description ? (
+          <Text style={styles.description} numberOfLines={2}>
+            {hunt.description}
+          </Text>
+        ) : null}
+
+        <View style={styles.rewardRow}>
+          <View style={styles.rewardPill}>
+            <Text style={styles.rewardText}>⭐ Mission</Text>
+          </View>
+
+          <View style={styles.rewardPill}>
+            <Text style={styles.rewardText}>🎯 Géolocalisée</Text>
+          </View>
+
+          <View style={styles.rewardPill}>
+            <Text style={styles.rewardText}>
+              {hunt.isActive ? '🔥 Disponible' : '⏳ Bientôt'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.cardBottom}>
+          <View style={styles.progressOuter}>
+            <View style={[styles.progressInner, { width: hunt.isActive ? '72%' : '18%' }]} />
+            <Text style={styles.progressText}>
+              {hunt.isActive ? 'Prête à jouer' : 'Inactive'}
+            </Text>
+          </View>
+
+          <LinearGradient
+            colors={hunt.isActive ? ['#059669', '#059669'] : ['#64748b', '#475569']}
+            style={styles.playButton}
+          >
+            <Text style={styles.playButtonText}>{hunt.isActive ? 'OUVRIR' : 'VOIR'}</Text>
+          </LinearGradient>
+        </View>
+      </GoldFrame>
+    </Pressable>
+  );
+}
 
 export default function HuntsScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const [filterMode, setFilterMode] = useState<FilterMode>('my-city');
 
-  // Charge hunts + profil en parallèle
   const loadData = useCallback(async () => {
     const [hunts, profile] = await Promise.all([
       lootopiaApi.getHunts(),
@@ -29,6 +132,7 @@ export default function HuntsScreen() {
         ? lootopiaApi.getUser(session.userId).catch(() => null)
         : Promise.resolve(null),
     ]);
+
     return { hunts, userCity: profile?.city ?? null };
   }, [session?.userId]);
 
@@ -37,347 +141,496 @@ export default function HuntsScreen() {
   const userCity = data?.userCity ?? null;
   const allHunts = data?.hunts ?? [];
 
-  // Filtre côté client — comparaison insensible à la casse
   const visibleHunts = useMemo<Hunt[]>(() => {
     if (filterMode === 'all' || !userCity) return allHunts;
+
     return allHunts.filter(
-      (h) => h.city?.toLowerCase().trim() === userCity.toLowerCase().trim()
+      (hunt) => hunt.city?.toLowerCase().trim() === userCity.toLowerCase().trim()
     );
   }, [allHunts, filterMode, userCity]);
 
+  const openHuntDetails = (hunt: Hunt) => {
+    if (!Number.isFinite(hunt.id) || hunt.id <= 0) {
+      Alert.alert('Chasse indisponible', 'Cette chasse a un identifiant invalide.');
+      return;
+    }
+
+    router.push(`/hunts/${hunt.id}`);
+  };
+
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.glow, styles.glowLeft]} />
-        <View style={[styles.glow, styles.glowRight]} />
+    <GameBackground>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <AppHeader />
 
-        {/* Hero */}
-        <View style={styles.heroCard}>
-          <ThemedText style={styles.kicker}>Terrain de jeu</ThemedText>
-          <ThemedText type="title" style={styles.title} lightColor="#ffffff" darkColor="#ffffff">
-            Chasses disponibles
-          </ThemedText>
-          <ThemedText style={styles.subtitle} lightColor="#ffffff" darkColor="#ffffff">
-            Choisis une mission et commence ton aventure géolocalisée.
-          </ThemedText>
-        </View>
+        <GoldFrame>
+          <View style={styles.summaryTop}>
+            <View>
+              <Text style={styles.summaryLabel}>ZONE ACTUELLE</Text>
+              <Text style={styles.summaryCity}>📍 {userCity ?? 'Ville non définie'}</Text>
+            </View>
 
-        {/* Toggle filtre ville */}
-        <View style={styles.filterRow}>
-          <Pressable
-            style={[styles.filterChip, filterMode === 'all' && styles.filterChipActive]}
-            onPress={() => setFilterMode('all')}
-          >
-            <ThemedText style={filterMode === 'all' ? styles.filterTextActive : styles.filterText}>
-              🌍 Toutes les villes
-            </ThemedText>
-          </Pressable>
+            <View style={styles.summaryCounter}>
+              <Text style={styles.summaryNumber}>{visibleHunts.length}</Text>
+              <Text style={styles.summarySmall}>chasses</Text>
+            </View>
+          </View>
 
-          <Pressable
-            style={[
-              styles.filterChip,
-              filterMode === 'my-city' && styles.filterChipActive,
-              !userCity && !loading && styles.filterChipDisabled,
-            ]}
-            onPress={() => userCity && setFilterMode('my-city')}
-            disabled={!userCity && !loading}
-          >
-            <ThemedText style={[
-              filterMode === 'my-city' ? styles.filterTextActive : styles.filterText,
-              !userCity && !loading && styles.filterTextDisabled,
-            ]}>
-              📍 {userCity ?? 'Ma ville (non définie)'}
-            </ThemedText>
-          </Pressable>
-        </View>
+          <View style={styles.filterRow}>
+            <Pressable
+              style={[styles.filterChip, filterMode === 'my-city' && styles.filterChipActive]}
+              onPress={() => userCity && setFilterMode('my-city')}
+              disabled={!userCity}
+            >
+              <Text style={[styles.filterText, filterMode === 'my-city' && styles.filterTextActive]}>
+                📍 Ma ville
+              </Text>
+            </Pressable>
 
-        {/* Compteur */}
-        {!loading ? (
-          <ThemedText style={styles.counter}>
-            {visibleHunts.length} chasse{visibleHunts.length !== 1 ? 's' : ''}
-            {filterMode === 'my-city' && userCity ? ` à ${userCity}` : ''}
-          </ThemedText>
-        ) : null}
+            <Pressable
+              style={[styles.filterChip, filterMode === 'all' && styles.filterChipActive]}
+              onPress={() => setFilterMode('all')}
+            >
+              <Text style={[styles.filterText, filterMode === 'all' && styles.filterTextActive]}>
+                🌍 Toutes
+              </Text>
+            </Pressable>
+          </View>
+        </GoldFrame>
 
-        {/* États chargement / erreur */}
         {loading ? (
-          <ThemedText style={styles.feedback} lightColor="#ffffff" darkColor="#ffffff">
-            Chargement...
-          </ThemedText>
-        ) : null}
-        {error ? <ThemedText style={styles.error}>Erreur : {error}</ThemedText> : null}
-
-        {/* Ville non définie */}
-        {!loading && filterMode === 'my-city' && !userCity ? (
-          <View style={styles.emptyCard}>
-            <ThemedText style={styles.emptyText}>
-              Tu n'as pas encore défini ta ville dans ton profil.{'\n'}
-              Mets-la à jour ou affiche toutes les villes.
-            </ThemedText>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator color="#facc15" />
+            <Text style={styles.loadingText}>Chargement des chasses...</Text>
           </View>
         ) : null}
 
-        {/* Aucune chasse dans cette ville */}
-        {!loading && filterMode === 'my-city' && userCity && visibleHunts.length === 0 && !error ? (
-          <View style={styles.emptyCard}>
-            <ThemedText style={styles.emptyText}>
-              Aucune chasse disponible à {userCity} pour le moment.
-            </ThemedText>
-          </View>
+        {error ? <Text style={styles.error}>Erreur : {error}</Text> : null}
+
+        {!loading && !error && filterMode === 'my-city' && !userCity ? (
+          <GoldFrame>
+            <Text style={styles.emptyTitle}>VILLE NON DÉFINIE</Text>
+            <Text style={styles.emptyText}>
+              Ajoute ta ville dans ton profil ou affiche toutes les villes.
+            </Text>
+          </GoldFrame>
         ) : null}
 
-        {/* Liste */}
-        {visibleHunts.map((hunt: Hunt) => (
-          <Pressable
+        {!loading && !error && visibleHunts.length === 0 && userCity ? (
+          <GoldFrame>
+            <Text style={styles.emptyTitle}>AUCUNE CHASSE</Text>
+            <Text style={styles.emptyText}>
+              Aucune mission disponible à {userCity} pour le moment.
+            </Text>
+          </GoldFrame>
+        ) : null}
+
+        <View style={styles.listHeader}>
+          <Text style={styles.sectionTitle}>
+            {filterMode === 'my-city' && userCity
+              ? `MISSIONS À ${userCity.toUpperCase()}`
+              : 'TOUTES LES MISSIONS'}
+          </Text>
+          <Text style={styles.sectionCounter}>{visibleHunts.length}</Text>
+        </View>
+
+        {visibleHunts.map((hunt) => (
+          <HuntCard
             key={hunt.id}
-            onPress={() => router.push(`/hunts/${hunt.id}`)}
-            style={[
-              styles.card,
-              {
-                borderColor: hunt.isActive
-                  ? 'rgba(52,211,153,0.65)'
-                  : 'rgba(148,163,184,0.35)',
-                opacity: hunt.isActive ? 1 : 0.75,
-              },
-            ]}
-          >
-            <View style={styles.cardTop}>
-              <ThemedText
-                type="defaultSemiBold"
-                style={styles.cardTitle}
-                lightColor="#ffffff"
-                darkColor="#ffffff"
-              >
-                {hunt.title}
-              </ThemedText>
-              <ThemedText style={[styles.badge, hunt.isActive ? styles.badgeActive : styles.badgeInactive]}>
-                {hunt.isActive ? 'Active' : 'Inactive'}
-              </ThemedText>
-            </View>
-
-            {hunt.description ? (
-              <ThemedText style={styles.description} lightColor="#ffffff" darkColor="#ffffff">
-                {hunt.description}
-              </ThemedText>
-            ) : null}
-
-            <View style={styles.footer}>
-              {hunt.city ? (
-                <View style={styles.cityTag}>
-                  <ThemedText style={styles.cityTagText}>📍 {hunt.city}</ThemedText>
-                </View>
-              ) : null}
-              <ThemedText style={styles.meta} lightColor="#ffffff" darkColor="#ffffff">
-                Créée le {formatDate(hunt.createdAt)}
-              </ThemedText>
-            </View>
-
-            <ThemedText style={styles.openHint} lightColor="#6ee7b7" darkColor="#6ee7b7">
-              Ouvrir le détail →
-            </ThemedText>
-          </Pressable>
+            hunt={hunt}
+            onPress={() => openHuntDetails(hunt)}
+          />
         ))}
 
-        <Pressable style={styles.refreshButton} onPress={() => void refresh()}>
-          <ThemedText style={styles.refreshText} lightColor="#ffffff" darkColor="#ffffff">
-            Rafraîchir
-          </ThemedText>
+        <Pressable onPress={() => void refresh()} style={({ pressed }) => pressed && styles.pressed}>
+          <LinearGradient colors={['#34d399', '#059669', '#065f46']} style={styles.refreshButton}>
+            <Text style={styles.refreshText}>RAFRAÎCHIR LES CHASSES</Text>
+          </LinearGradient>
         </Pressable>
       </ScrollView>
-    </ThemedView>
+    </GameBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0b1220',
+    backgroundColor: '#020617',
   },
-  content: {
-    gap: 12,
-    padding: 16,
-    paddingBottom: 28,
+
+  bgImage: {
+    opacity: 1,
   },
-  glow: {
+
+  bgOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+
+  glowBlob: {
     position: 'absolute',
     borderRadius: 999,
-    opacity: 0.2,
   },
-  glowLeft: {
-    width: 220,
-    height: 220,
-    left: -60,
-    top: -30,
+  glowEmerald: {
+    width: 360,
+    height: 360,
+    left: -160,
+    top: 110,
     backgroundColor: '#10b981',
+    opacity: 0.18,
   },
-  glowRight: {
-    width: 180,
-    height: 180,
-    right: -70,
-    top: 180,
+  glowCyan: {
+    width: 300,
+    height: 300,
+    right: -140,
+    top: 260,
     backgroundColor: '#06b6d4',
+    opacity: 0.14,
   },
-  heroCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(30,41,59,0.86)',
-    padding: 16,
-    gap: 6,
-  },
-  kicker: {
-    color: '#34d399',
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    fontWeight: '700',
-  },
-  title: {
-    color: '#f8fafc',
-  },
-  subtitle: {
-    color: '#ffffff',
-    fontSize: 13,
-    lineHeight: 19,
+  glowGold: {
+    width: 260,
+    height: 260,
+    left: 80,
+    bottom: -100,
+    backgroundColor: '#f59e0b',
+    opacity: 0.14,
   },
 
-  // Filtre
-  filterRow: {
+  content: {
+    gap: 14,
+    padding: 16,
+    paddingTop: 48,
+    paddingBottom: 36,
+  },
+
+  header: {
     flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 12,
   },
-  filterChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.45)',
-    backgroundColor: 'rgba(30,41,59,0.78)',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  filterChipActive: {
-    backgroundColor: '#0f766e',
-    borderColor: '#0f766e',
-  },
-  filterChipDisabled: {
-    opacity: 0.4,
-  },
-  filterText: {
-    fontSize: 12,
-    color: '#cbd5e1',
-  },
-  filterTextActive: {
-    fontSize: 12,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  filterTextDisabled: {
-    color: '#64748b',
-  },
-  counter: {
-    fontSize: 12,
-    color: '#64748b',
-    marginLeft: 2,
-  },
-
-  // États
-  feedback: {
-    color: '#ffffff',
-    fontSize: 13,
-  },
-  error: {
-    color: '#fda4af',
-    fontSize: 13,
-  },
-  emptyCard: {
+  backButton: {
+    width: 52,
+    height: 52,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.2)',
-    backgroundColor: 'rgba(30,41,59,0.65)',
-    padding: 16,
+    backgroundColor: '#1f160c',
+    borderWidth: 3,
+    borderColor: '#d97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backText: {
+    color: '#fef3c7',
+    fontSize: 42,
+    fontWeight: '900',
+    lineHeight: 42,
+  },
+  refreshIconButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#1f160c',
+    borderWidth: 3,
+    borderColor: '#0f766e',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refreshIcon: {
+    color: '#5eead4',
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  headerTextWrap: {
+    flex: 1,
     alignItems: 'center',
   },
-  emptyText: {
-    color: '#94a3b8',
+  kicker: {
+    color: '#5eead4',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  title: {
+    color: '#facc15',
+    fontSize: 38,
+    fontWeight: '900',
+    letterSpacing: 2,
+    textShadowColor: 'rgba(16,185,129,0.65)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 18,
+  },
+  subtitle: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  goldFrame: {
+    borderRadius: 24,
+    padding: 4,
+    shadowColor: '#facc15',
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  goldFrameInner: {
+    borderRadius: 20,
+    backgroundColor: 'rgba(2,44,34,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(45,212,191,0.22)',
+    padding: 14,
+  },
+
+  summaryTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    color: '#5eead4',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+  },
+  summaryCity: {
+    color: '#fff7ed',
+    fontSize: 19,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  summaryCounter: {
+    width: 78,
+    height: 78,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#facc15',
+    backgroundColor: 'rgba(31,22,12,0.86)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryNumber: {
+    color: '#facc15',
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  summarySmall: {
+    color: '#fef3c7',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+
+  filterRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  filterChip: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 11,
+    alignItems: 'center',
+    backgroundColor: 'rgba(15,23,42,0.58)',
+    borderWidth: 2,
+    borderColor: 'rgba(148,163,184,0.28)',
+  },
+  filterChipActive: {
+    backgroundColor: 'rgba(15,118,110,0.92)',
+    borderColor: '#5eead4',
+  },
+  filterText: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  filterTextActive: {
+    color: '#fff7ed',
+  },
+
+  sectionTitle: {
+    color: '#5eead4',
     fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+  },
+  listHeader: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionCounter: {
+    color: '#facc15',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+
+  loadingCard: {
+    borderRadius: 18,
+    padding: 20,
+    backgroundColor: 'rgba(2,44,34,0.72)',
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    color: '#fef3c7',
+    fontWeight: '800',
+  },
+  error: {
+    color: '#fecaca',
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  emptyTitle: {
+    color: '#facc15',
+    fontSize: 18,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  emptyText: {
+    color: '#fef3c7',
+    marginTop: 6,
+    fontSize: 13,
+    fontWeight: '700',
     textAlign: 'center',
     lineHeight: 20,
   },
 
-  // Carte chasse
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    backgroundColor: 'rgba(30,41,59,0.82)',
-    gap: 8,
-    padding: 14,
+  inactiveFrame: {
+    opacity: 0.72,
   },
-  cardTop: {
+  huntTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+    gap: 10,
   },
-  cardTitle: {
-    color: '#f8fafc',
+  huntIconBox: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    backgroundColor: 'rgba(31,22,12,0.84)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  huntIcon: {
+    fontSize: 28,
+  },
+  huntTitleWrap: {
     flex: 1,
   },
-  description: {
-    fontSize: 13,
-    color: '#ffffff',
-    lineHeight: 19,
+  huntTitle: {
+    color: '#fff7ed',
+    fontSize: 17,
+    fontWeight: '900',
   },
-  footer: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  cityTag: {
-    borderRadius: 8,
-    backgroundColor: 'rgba(15,118,110,0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(52,211,153,0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  cityTagText: {
-    fontSize: 11,
-    color: '#6ee7b7',
-    fontWeight: '600',
-  },
-  meta: {
-    fontSize: 12,
-    color: '#ffffff',
-  },
-  badge: {
+  huntMeta: {
+    color: '#a7f3d0',
     fontSize: 11,
     fontWeight: '700',
-    alignSelf: 'flex-start',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 999,
-    color: '#fff',
-    overflow: 'hidden',
+    marginTop: 3,
   },
-  badgeActive: {
+  statusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  statusActive: {
     backgroundColor: '#059669',
   },
-  badgeInactive: {
+  statusInactive: {
     backgroundColor: '#475569',
   },
-  openHint: {
-    fontSize: 12,
-    color: '#6ee7b7',
+  statusText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '900',
   },
-  refreshButton: {
-    borderRadius: 12,
-    backgroundColor: '#059669',
-    paddingVertical: 12,
+  description: {
+    color: '#e2e8f0',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 10,
+  },
+
+  rewardRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+    marginTop: 12,
+  },
+  rewardPill: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(94,234,212,0.28)',
+    backgroundColor: 'rgba(15,118,110,0.22)',
+  },
+  rewardText: {
+    color: '#ccfbf1',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  cardBottom: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+  },
+  progressOuter: {
+    flex: 1,
+    height: 18,
+    borderRadius: 999,
+    backgroundColor: '#09090b',
+    borderWidth: 2,
+    borderColor: '#0f766e',
+    overflow: 'hidden',
+  },
+  progressInner: {
+    height: '100%',
+    backgroundColor: '#10b981',
+  },
+  progressText: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: -1,
+    color: '#fff7ed',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  playButton: {
+    minWidth: 82,
+    height: 38,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  playButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  refreshButton: {
+    minHeight: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#5eead4',
   },
   refreshText: {
     color: '#fff',
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+
+  pressed: {
+    transform: [{ scale: 0.97 }, { translateY: 2 }],
+    opacity: 0.9,
   },
 });

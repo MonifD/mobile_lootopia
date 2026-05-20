@@ -96,9 +96,8 @@ export type Step = {
 
 export type Participation = {
   id: number;
-  /** IRI de l'étape, ex: "/api/steps/42" */
   step: string;
-  /** IRI de l'utilisateur, ex: "/api/users/7" */
   user: string;
+  pointsEarned: number;
   completedAt: string | null;
 };

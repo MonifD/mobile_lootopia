@@ -1,9 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 
-import type { AuthSession } from '@/types/auth';
 import { createSessionFromLogin, lootopiaApi, setAuthToken } from '@/services/lootopia-api';
+import type { AuthSession } from '@/types/auth';
 
 const SESSION_KEY = 'lootopia.mobile.session';
 
@@ -15,7 +15,7 @@ type AuthContextValue = {
   isLoading: boolean;
   session: AuthSession | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, username: string, password: string) => Promise<void>;
+  signUp: (email: string, username: string, password: string, city?: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -110,8 +110,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await saveSession(nextSession);
         setSession(nextSession);
       },
-      signUp: async (email: string, username: string, password: string) => {
-        await lootopiaApi.register({ email, username, password });
+      signUp: async (email: string, username: string, password: string, city?: string) => {
+        await lootopiaApi.register({ email, username, password, city });
         setAuthToken(null);
         await saveSession(null);
         setSession(null);
