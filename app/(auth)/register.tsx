@@ -2,7 +2,7 @@ import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     ImageBackground,
@@ -16,8 +16,10 @@ import {
     View,
 } from 'react-native';
 
-import { SUPPORTED_CITIES } from '@/constants/cities';
+import { lootopiaApi } from '@/services/lootopia-api';
 import { useAuth } from '@/providers/auth-provider';
+
+type ApiCity = { id: number; name: string; iri: string };
 
 function Nail({ style }: { style: object }) {
   return (
@@ -39,11 +41,21 @@ export default function RegisterScreen() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [city, setCity] = useState<string>(SUPPORTED_CITIES[0]);
+  const [cities, setCities] = useState<ApiCity[]>([]);
+  const [selectedCity, setSelectedCity] = useState<ApiCity | null>(null);
   const [cityOpen, setCityOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    lootopiaApi.getCities().then((list) => {
+      setCities(list);
+      if (list.length > 0) setSelectedCity(list[0]);
+    }).catch(() => {
+      // silently ignore — city restera null, champ optionnel
+    });
+  }, []);
 
   const orbitron = fontsLoaded ? 'Orbitron_700Bold' : undefined;
 
@@ -51,7 +63,8 @@ export default function RegisterScreen() {
     try {
       setError(null);
       setIsLoading(true);
-      await signUp(email, username, password, city);
+      // On envoie l'IRI (/api/cities/{id}) que le backend attend, pas le nom
+      await signUp(email, username, password, selectedCity?.iri);
       router.replace('/login');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Registration failed';
@@ -170,7 +183,9 @@ export default function RegisterScreen() {
                         <Text style={styles.inputIcon}>📍</Text>
                       </View>
 
-                      <Text style={[styles.cityValueText, { fontFamily: orbitron }]}>{city}</Text>
+                      <Text style={[styles.cityValueText, { fontFamily: orbitron }]}>
+                        {selectedCity ? selectedCity.name : '…'}
+                      </Text>
 
                       <View style={styles.eyeButton}>
                         <Text style={styles.eyeText}>{cityOpen ? '▲' : '▼'}</Text>
@@ -180,20 +195,22 @@ export default function RegisterScreen() {
 
                   {cityOpen ? (
                     <View style={styles.cityDropdown}>
-                      {SUPPORTED_CITIES.map((item) => (
+                      {cities.map((item) => (
                         <Pressable
-                          key={item}
+                          key={item.id}
                           onPress={() => {
-                            setCity(item);
+                            setSelectedCity(item);
                             setCityOpen(false);
                           }}
                           style={({ pressed }) => [
                             styles.cityOption,
-                            item === city && styles.cityOptionActive,
+                            item.id === selectedCity?.id && styles.cityOptionActive,
                             pressed && styles.pressed,
                           ]}
                         >
-                          <Text style={[styles.cityOptionText, item === city && styles.cityOptionTextActive]}>{item}</Text>
+                          <Text style={[styles.cityOptionText, item.id === selectedCity?.id && styles.cityOptionTextActive]}>
+                            {item.name}
+                          </Text>
                         </Pressable>
                       ))}
                     </View>

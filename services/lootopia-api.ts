@@ -2,6 +2,7 @@ import type { AuthSession, LoginPayload, LoginResponse, RegisterPayload } from '
 import type {
     Achievement,
     Hunt,
+    HuntHistoryEntry,
     HuntReview,
     HuntReviewStats,
     LeaderboardEntry,
@@ -534,6 +535,19 @@ async function loginWithFallback(payload: LoginPayload): Promise<LoginResponse> 
 }
 
 export const lootopiaApi = {
+  getCities: () =>
+    request<unknown>('/cities').then((payload) => {
+      const items = unwrapCollection<unknown>(payload);
+      return items.map((raw) => {
+        const source = (raw ?? {}) as PrimitiveRecord;
+        return {
+          id: toNumber(source.id),
+          name: toString(source.name),
+          iri: `/api/cities/${toNumber(source.id)}`,
+        };
+      });
+    }),
+
   register: (payload: RegisterPayload) =>
     request<PlayerProfile>('/users', {
       method: 'POST',
@@ -692,6 +706,35 @@ export const lootopiaApi = {
 
   getHuntReviewStats: (huntId: number) =>
     request<unknown>(`/hunts/${huntId}/reviews/stats`).then((payload) => normalizeReviewStats(payload)),
+
+  getHuntHistory: (status: 'all' | 'completed' | 'in_progress' = 'all', limit = 100) =>
+    request<unknown>(`/users/me/hunt-history?status=${status}&limit=${limit}`).then((payload) => {
+      const raw = (payload ?? {}) as Record<string, unknown>;
+      const items = Array.isArray(raw['data']) ? (raw['data'] as unknown[]) : unwrapCollection<unknown>(payload);
+      return items.map((entry) => {
+        const e = (entry ?? {}) as Record<string, unknown>;
+        const hunt = (e['hunt'] ?? {}) as Record<string, unknown>;
+        const city = hunt['city'] ? (hunt['city'] as Record<string, unknown>) : null;
+        return {
+          hunt: {
+            id: toNumber(hunt['id']),
+            title: toString(hunt['title']),
+            description: toNullableString(hunt['description']),
+            isActive: hunt['isActive'] === true,
+            city: city ? { id: toNumber(city['id']), name: toString(city['name']) } : null,
+          },
+          status: toString(e['status']) as 'completed' | 'in_progress',
+          stepsCompleted: toNumber(e['stepsCompleted']),
+          totalSteps: toNumber(e['totalSteps']),
+          progress: typeof e['progress'] === 'number' ? e['progress'] : 0,
+          totalPoints: toNumber(e['totalPoints']),
+          startedAt: toString(e['startedAt']),
+          lastActivityAt: toString(e['lastActivityAt']),
+          completedAt: toNullableString(e['completedAt']),
+          durationSeconds: toNullableNumber(e['durationSeconds']),
+        } satisfies HuntHistoryEntry;
+      });
+    }),
 
   getMyRank: () => request<UserRank>('/leaderboard/my-rank'),
 
