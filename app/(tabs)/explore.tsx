@@ -179,16 +179,12 @@ export default function AchievementsScreen() {
     [],
   );
 
-  const { data: achievements, error: achError, loading: achLoading, refresh: refreshAch } = useApiResource(loadAchievements);
-  const { data: huntHistory, error: huntError, loading: huntLoading, refresh: refreshHunts } = useApiResource(loadHuntHistory);
+  const { data: achievements, error: achError, loading: achLoading } = useApiResource(loadAchievements);
+  const { data: huntHistory, error: huntError, loading: huntLoading } = useApiResource(loadHuntHistory);
 
   const inProgress = huntHistory?.filter((e) => e.status === 'in_progress') ?? [];
   const completed  = huntHistory?.filter((e) => e.status === 'completed')   ?? [];
 
-  const handleRefresh = useCallback(() => {
-    void refreshAch();
-    void refreshHunts();
-  }, [refreshAch, refreshHunts]);
 
   return (
     <ImageBackground
@@ -208,9 +204,7 @@ export default function AchievementsScreen() {
             <Text style={styles.pageTitle}>SUCCÈS</Text>
             <Text style={styles.pageSubtitle}>ACCOMPLISSEMENTS</Text>
           </View>
-          <Pressable onPress={handleRefresh} style={styles.iconButton}>
-            <Text style={styles.refreshTopIcon}>↻</Text>
-          </Pressable>
+          <View style={styles.iconButton} />
         </View>
 
         {(achLoading || huntLoading) ? <ActivityIndicator color="#facc15" /> : null}
@@ -314,14 +308,6 @@ export default function AchievementsScreen() {
           ) : null
         )}
 
-        {/* Refresh button */}
-        <Pressable onPress={handleRefresh} style={({ pressed }) => pressed && styles.pressed}>
-          <LinearGradient colors={['#fff3a3', '#f59e0b', '#7c2d12']} style={styles.refreshBorder}>
-            <LinearGradient colors={['#065f46', '#132018']} style={styles.refreshButton}>
-              <Text style={styles.refreshText}>🧭 RAFRAÎCHIR</Text>
-            </LinearGradient>
-          </LinearGradient>
-        </Pressable>
       </ScrollView>
     </ImageBackground>
   );

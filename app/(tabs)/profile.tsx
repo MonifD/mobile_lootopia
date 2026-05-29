@@ -500,14 +500,6 @@ export default function ProfileScreen() {
             />
 
             <ActionButton
-              icon="📍"
-              title="RAFRAÎCHIR"
-              subtitle="Mettre à jour tes informations"
-              color="#92400e"
-              onPress={() => void refresh()}
-            />
-
-            <ActionButton
               icon="🚪"
               title="SE DÉCONNECTER"
               subtitle="Quitter ton compte"

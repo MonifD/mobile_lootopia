@@ -266,11 +266,6 @@ export default function HuntsScreen() {
           />
         ))}
 
-        <Pressable onPress={() => void refresh()} style={({ pressed }) => pressed && styles.pressed}>
-          <LinearGradient colors={['#34d399', '#059669', '#065f46']} style={styles.refreshButton}>
-            <Text style={styles.refreshText}>RAFRAÎCHIR LES CHASSES</Text>
-          </LinearGradient>
-        </Pressable>
       </ScrollView>
     </GameBackground>
   );
