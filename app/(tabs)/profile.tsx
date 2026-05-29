@@ -1,54 +1,146 @@
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    ImageBackground,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { useApiResource } from '@/hooks/use-api-resource';
 import { useAuth } from '@/providers/auth-provider';
-import { lootopiaApi, API_BASE_URL } from '@/services/lootopia-api';
+import { API_BASE_URL, lootopiaApi } from '@/services/lootopia-api';
 
 function getLevelColor(level: string): string {
   switch (level.toUpperCase()) {
-    case 'LEGEND':   return '#fbbf24';
-    case 'PLATINUM': return '#06b6d4';
-    case 'GOLD':     return '#f59e0b';
-    case 'SILVER':   return '#d1d5db';
-    case 'BRONZE':   return '#b45309';
-    default:         return '#6b7280';
+    case 'LEGEND':
+      return '#fbbf24';
+    case 'PLATINUM':
+      return '#06b6d4';
+    case 'GOLD':
+      return '#f59e0b';
+    case 'SILVER':
+      return '#d1d5db';
+    case 'BRONZE':
+      return '#b45309';
+    default:
+      return '#84cc16';
   }
 }
 
 function buildAvatarUrl(path: string | null): string | null {
   if (!path) return null;
   if (path.startsWith('http')) return path;
-  // path = "/uploads/avatars/xxx.jpg" → on préfixe la base sans /api
   const base = API_BASE_URL.replace(/\/api\/?$/, '');
   return `${base}${path}`;
+}
+
+function formatActivityDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear()).slice(-2);
+
+  return `${day}/${month}/${year}`;
+}
+
+function GoldFrame({ children, style }: { children: React.ReactNode; style?: object }) {
+  return (
+    <LinearGradient
+      colors={['#fff3a3', '#f59e0b', '#7c2d12']}
+      style={[styles.goldFrame, style]}
+    >
+      <View style={styles.goldFrameInner}>{children}</View>
+    </LinearGradient>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  subtitle,
+  color,
+}: {
+  icon: string;
+  label: string;
+  value: string | number;
+  subtitle?: string;
+  color: string;
+}) {
+  return (
+    <LinearGradient colors={['#fff3a3', '#f59e0b', '#7c2d12']} style={styles.statBorder}>
+      <LinearGradient colors={[color, '#102018']} style={styles.statCard}>
+        <View style={styles.cardGloss} />
+        <Text style={styles.statIcon}>{icon}</Text>
+        <Text style={styles.statLabel}>{label}</Text>
+        <Text style={styles.statValue}>{value}</Text>
+        {subtitle ? <Text style={styles.statSubtitle}>{subtitle}</Text> : null}
+      </LinearGradient>
+    </LinearGradient>
+  );
+}
+
+function ActionButton({
+  icon,
+  title,
+  subtitle,
+  color,
+  onPress,
+  loading,
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  color: string;
+  onPress: () => void;
+  loading?: boolean;
+}) {
+  return (
+    <Pressable onPress={onPress} disabled={loading} style={({ pressed }) => pressed && styles.pressed}>
+      <LinearGradient colors={['#fff3a3', '#f59e0b', '#7c2d12']} style={styles.actionBorder}>
+        <LinearGradient colors={[color, '#132018']} style={styles.actionButton}>
+          <Text style={styles.actionIcon}>{icon}</Text>
+
+          <View style={styles.actionTextWrap}>
+            <Text style={styles.actionTitle}>{title}</Text>
+            <Text style={styles.actionSubtitle}>{subtitle}</Text>
+          </View>
+
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.actionArrow}>›</Text>
+          )}
+        </LinearGradient>
+      </LinearGradient>
+    </Pressable>
+  );
 }
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { session, signOut } = useAuth();
 
-  // ── Mode édition ──────────────────────────────────────────────────────────
   const [isEditing, setIsEditing] = useState(false);
   const [editUsername, setEditUsername] = useState('');
   const [editCity, setEditCity] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
-  // ── Chargement du profil ──────────────────────────────────────────────────
   const loadProfile = useCallback(() => {
     const req = !session?.userId
       ? lootopiaApi.getCurrentUser()
@@ -66,13 +158,19 @@ export default function ProfileScreen() {
 
   const { data: profile, error, loading, refresh } = useApiResource(loadProfile);
 
-  // ── Rang du joueur ────────────────────────────────────────────────────────
   const loadRank = useCallback(() => {
     if (!session?.userId) return Promise.resolve(null);
     return lootopiaApi.getUserRank(session.userId).catch(() => null);
   }, [session?.userId]);
 
-  const { data: rank } = useApiResource(loadRank);
+  const { data: rank, refresh: refreshRank } = useApiResource(loadRank);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+      void refreshRank();
+    }, [refresh, refreshRank])
+  );
 
   const rankPercentileLabel = useMemo(() => {
     if (!rank) return null;
@@ -83,7 +181,6 @@ export default function ProfileScreen() {
     return `Top ${Math.round(100 - p)}%`;
   }, [rank]);
 
-  // ── Ouvrir le formulaire d'édition ────────────────────────────────────────
   const startEdit = () => {
     setEditUsername(profile?.username ?? '');
     setEditCity(profile?.city ?? '');
@@ -92,7 +189,6 @@ export default function ProfileScreen() {
 
   const cancelEdit = () => setIsEditing(false);
 
-  // ── Sauvegarder les modifications ─────────────────────────────────────────
   const saveProfile = async () => {
     if (!session?.userId) return;
 
@@ -100,7 +196,7 @@ export default function ProfileScreen() {
     const trimmedCity = editCity.trim();
 
     if (!trimmedUsername) {
-      Alert.alert('Validation', 'Le nom d\'utilisateur ne peut pas etre vide.');
+      Alert.alert('Validation', 'Le nom d’utilisateur ne peut pas être vide.');
       return;
     }
 
@@ -126,18 +222,18 @@ export default function ProfileScreen() {
     }
   };
 
-  // ── Upload avatar ─────────────────────────────────────────────────────────
   const pickAndUploadAvatar = async () => {
     if (!session?.userId) return;
 
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
     if (status !== 'granted') {
-      Alert.alert('Permission requise', 'Autorise l\'accès à ta galerie dans les réglages.');
+      Alert.alert('Permission requise', 'Autorise l’accès à ta galerie dans les réglages.');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],   // MediaTypeOptions supprimé en v17
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -161,11 +257,10 @@ export default function ProfileScreen() {
     }
   };
 
-  // ── Supprimer avatar ──────────────────────────────────────────────────────
   const confirmDeleteAvatar = () => {
     Alert.alert(
-      'Supprimer l\'avatar',
-      'Es-tu sur de vouloir supprimer ta photo de profil ?',
+      'Supprimer l’avatar',
+      'Es-tu sûr de vouloir supprimer ta photo de profil ?',
       [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Supprimer', style: 'destructive', onPress: deleteAvatar },
@@ -175,6 +270,7 @@ export default function ProfileScreen() {
 
   const deleteAvatar = async () => {
     if (!session?.userId) return;
+
     try {
       setIsUploadingAvatar(true);
       await lootopiaApi.deleteAvatar(session.userId);
@@ -195,486 +291,657 @@ export default function ProfileScreen() {
   const avatarUrl = buildAvatarUrl(profile?.avatarUrl ?? null);
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <ImageBackground
+      source={require('@/assets/images/rendu-3d-du-scenario-routier_23-2151293955.jpg')}
+      style={styles.root}
+      resizeMode="cover"
+    >
+      <View style={styles.overlay} />
 
-        {/* Hero */}
-        <View style={styles.heroCard}>
-          <ThemedText style={styles.kicker}>Compte joueur</ThemedText>
-          <ThemedText type="title" style={styles.title}>Profil</ThemedText>
-          <ThemedText style={styles.subtitle}>Gere ton identite, tes stats et ta progression.</ThemedText>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.topBar}>
+          <Pressable onPress={() => router.replace('/(tabs)')} style={styles.iconButton}>
+            <Text style={styles.iconButtonText}>‹</Text>
+          </Pressable>
+
+          <View style={styles.titleWrap}>
+            <Text style={styles.pageTitle}>PROFIL</Text>
+            <Text style={styles.pageSubtitle}>COMPTE JOUEUR</Text>
+          </View>
+
+          <Pressable style={styles.iconButton}>
+            <Text style={styles.settingsIcon}>⚙️</Text>
+          </Pressable>
         </View>
 
-        {loading ? <ActivityIndicator color="#34d399" /> : null}
-        {error ? <ThemedText style={styles.error}>Erreur: {error}</ThemedText> : null}
+        {loading ? <ActivityIndicator color="#facc15" /> : null}
+        {error ? <Text style={styles.error}>Erreur : {error}</Text> : null}
 
         {profile ? (
           <>
-            {/* ── Avatar ── */}
-            <View style={styles.avatarSection}>
-              <Pressable onPress={pickAndUploadAvatar} style={styles.avatarWrapper} disabled={isUploadingAvatar}>
-                {avatarUrl ? (
-                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <ThemedText style={styles.avatarInitial}>
-                      {(profile.username ?? '?')[0].toUpperCase()}
-                    </ThemedText>
-                  </View>
-                )}
-                <View style={styles.avatarEditBadge}>
-                  {isUploadingAvatar
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <ThemedText style={styles.avatarEditIcon}>📷</ThemedText>
-                  }
-                </View>
-              </Pressable>
-
-              {avatarUrl ? (
-                <Pressable onPress={confirmDeleteAvatar} style={styles.deleteAvatarBtn} disabled={isUploadingAvatar}>
-                  <ThemedText style={styles.deleteAvatarText}>Supprimer la photo</ThemedText>
-                </Pressable>
-              ) : (
-                <ThemedText style={styles.avatarHint}>Appuie sur la photo pour en choisir une</ThemedText>
-              )}
-            </View>
-
-            {/* ── Identité — Vue ou Édition ── */}
-            {isEditing ? (
-              <View style={styles.card}>
-                <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Modifier le profil</ThemedText>
-
-                <View style={styles.fieldGroup}>
-                  <ThemedText style={styles.fieldLabel}>Nom d'utilisateur</ThemedText>
-                  <TextInput
-                    style={styles.input}
-                    value={editUsername}
-                    onChangeText={setEditUsername}
-                    placeholder="Ton pseudo"
-                    placeholderTextColor="#64748b"
-                    autoCapitalize="none"
-                    editable={!isSaving}
-                  />
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <ThemedText style={styles.fieldLabel}>Ville</ThemedText>
-                  <TextInput
-                    style={styles.input}
-                    value={editCity}
-                    onChangeText={setEditCity}
-                    placeholder="Ta ville (optionnel)"
-                    placeholderTextColor="#64748b"
-                    editable={!isSaving}
-                  />
-                </View>
-
-                <View style={styles.editActions}>
-                  <Pressable style={styles.cancelBtn} onPress={cancelEdit} disabled={isSaving}>
-                    <ThemedText style={styles.cancelBtnText}>Annuler</ThemedText>
-                  </Pressable>
-                  <Pressable style={styles.saveBtn} onPress={() => void saveProfile()} disabled={isSaving}>
-                    {isSaving
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <ThemedText style={styles.saveBtnText}>Enregistrer</ThemedText>
-                    }
-                  </Pressable>
-                </View>
-              </View>
-            ) : (
-              <View style={styles.card}>
-                <View style={styles.identityRow}>
-                  <View style={styles.identityInfo}>
-                    <ThemedText type="defaultSemiBold" style={styles.name}>{profile.username}</ThemedText>
-                    <ThemedText style={styles.email}>{profile.email}</ThemedText>
-                    {profile.city ? (
-                      <ThemedText style={styles.city}>📍 {profile.city}</ThemedText>
-                    ) : null}
-                  </View>
-                  <View style={styles.identityRight}>
-                    <View style={[styles.levelBadge, { backgroundColor: getLevelColor(profile.level) }]}>
-                      <ThemedText style={styles.levelText}>{profile.level}</ThemedText>
+            <GoldFrame style={styles.profilePanel}>
+              <View style={styles.profileRow}>
+                <Pressable
+                  onPress={pickAndUploadAvatar}
+                  disabled={isUploadingAvatar}
+                  style={styles.avatarOuter}
+                >
+                  {avatarUrl ? (
+                    <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Text style={styles.avatarInitial}>
+                        {(profile.username ?? '?')[0].toUpperCase()}
+                      </Text>
                     </View>
-                    <Pressable style={styles.editBtn} onPress={startEdit}>
-                      <ThemedText style={styles.editBtnText}>✏️ Modifier</ThemedText>
+                  )}
+
+                  <View style={styles.cameraBadge}>
+                    {isUploadingAvatar ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.cameraIcon}>📷</Text>
+                    )}
+                  </View>
+                </Pressable>
+
+                <View style={styles.profileInfo}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.username}>{profile.username}</Text>
+
+                    <Pressable onPress={startEdit} style={styles.smallEditButton}>
+                      <Text style={styles.smallEditText}>✎</Text>
                     </Pressable>
                   </View>
+
+                  <Text style={styles.email}>{profile.email}</Text>
+
+                  {profile.city ? (
+                    <Text style={styles.city}>📍 {profile.city}</Text>
+                  ) : (
+                    <Text style={styles.cityMuted}>📍 Ville non renseignée</Text>
+                  )}
+
+                  {profile.lastActivityAt ? (
+                    <Text style={styles.activityDate}>
+                      Dernière activité : {formatActivityDate(profile.lastActivityAt)}
+                    </Text>
+                  ) : null}
+
+                  <Text style={styles.xpLabel}>EXPÉRIENCE</Text>
+
+                  <View style={styles.xpBarOuter}>
+                    <View style={styles.xpBarInner} />
+                    <Text style={styles.xpPercent}>65%</Text>
+                  </View>
+
+                  <Text style={styles.xpText}>15 650 / 24 000 XP</Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.levelShield,
+                    { borderColor: getLevelColor(profile.level) },
+                  ]}
+                >
+                  <Text style={styles.levelSmall}>NIVEAU</Text>
+                  <Text style={styles.levelNumber}>
+                    {String(profile.level).toUpperCase() === 'LEGEND' ? '★' : profile.level}
+                  </Text>
                 </View>
               </View>
-            )}
 
-            {/* ── Stats ── */}
+              {avatarUrl ? (
+                <Pressable onPress={confirmDeleteAvatar} disabled={isUploadingAvatar}>
+                  <Text style={styles.deleteAvatarText}>Supprimer la photo</Text>
+                </Pressable>
+              ) : null}
+            </GoldFrame>
+
+            {isEditing ? (
+              <GoldFrame>
+                <Text style={styles.editTitle}>MODIFIER LE PROFIL</Text>
+
+                <Text style={styles.inputLabel}>Nom d’utilisateur</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editUsername}
+                  onChangeText={setEditUsername}
+                  placeholder="Ton pseudo"
+                  placeholderTextColor="#9ca3af"
+                  autoCapitalize="none"
+                  editable={!isSaving}
+                />
+
+                <Text style={styles.inputLabel}>Ville</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editCity}
+                  onChangeText={setEditCity}
+                  placeholder="Ta ville"
+                  placeholderTextColor="#9ca3af"
+                  editable={!isSaving}
+                />
+
+                <View style={styles.editActions}>
+                  <Pressable style={styles.cancelButton} onPress={cancelEdit} disabled={isSaving}>
+                    <Text style={styles.cancelText}>Annuler</Text>
+                  </Pressable>
+
+                  <Pressable style={styles.saveButton} onPress={() => void saveProfile()} disabled={isSaving}>
+                    {isSaving ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.saveText}>Enregistrer</Text>
+                    )}
+                  </Pressable>
+                </View>
+              </GoldFrame>
+            ) : null}
+
             <View style={styles.statsGrid}>
-              <View style={styles.statBox}>
-                <ThemedText style={styles.statValue}>{profile.totalPoints}</ThemedText>
-                <ThemedText style={styles.statLabel}>Points</ThemedText>
-              </View>
-              <View style={styles.statBox}>
-                <ThemedText style={styles.statValue}>{profile.completedHunts}</ThemedText>
-                <ThemedText style={styles.statLabel}>Chasses</ThemedText>
-              </View>
-              <View style={styles.statBox}>
-                <ThemedText style={styles.statValue}>{profile.completedSteps ?? 0}</ThemedText>
-                <ThemedText style={styles.statLabel}>Étapes</ThemedText>
-              </View>
-              <View style={styles.statBox}>
-                <ThemedText style={styles.statValue}>{profile.loginStreak}</ThemedText>
-                <ThemedText style={styles.statLabel}>Série</ThemedText>
-              </View>
+              <StatCard
+                icon="🏆"
+                label="POINTS"
+                value={profile.totalPoints}
+                subtitle="Récoltés"
+                color="#6b0f0f"
+              />
+
+              <StatCard
+                icon="🗺️"
+                label="CHASSES"
+                value={profile.completedHunts}
+                subtitle="Terminées"
+                color="#5a3708"
+              />
+
+              <StatCard
+                icon="💎"
+                label="ÉTAPES"
+                value={profile.completedSteps ?? 0}
+                subtitle="Validées"
+                color="#064e3b"
+              />
+
+              <StatCard
+                icon="🔥"
+                label="SÉRIE"
+                value={`${profile.loginStreak}`}
+                subtitle="jours"
+                color="#0f3a5f"
+              />
             </View>
 
-            {/* ── Rang dans le classement ── */}
             {rank ? (
-              <View style={styles.rankCard}>
-                <ThemedText style={styles.rankKicker}>Classement global</ThemedText>
+              <GoldFrame>
                 <View style={styles.rankRow}>
-                  <View style={styles.rankMain}>
-                    <ThemedText style={styles.rankNumber}>#{rank.rank}</ThemedText>
-                    <ThemedText style={styles.rankTotal}>sur {rank.total} joueurs</ThemedText>
+                  <View>
+                    <Text style={styles.rankTitle}>CLASSEMENT GLOBAL</Text>
+                    <Text style={styles.rankNumber}>#{rank.rank}</Text>
+                    <Text style={styles.rankTotal}>sur {rank.total} joueurs</Text>
                   </View>
+
                   {rankPercentileLabel ? (
                     <View style={styles.rankBadge}>
-                      <ThemedText style={styles.rankBadgeText}>{rankPercentileLabel}</ThemedText>
+                      <Text style={styles.rankBadgeText}>{rankPercentileLabel}</Text>
                     </View>
                   ) : null}
                 </View>
-              </View>
+              </GoldFrame>
             ) : null}
 
-            {/* ── Dernière activité ── */}
-            {profile.lastActivityAt ? (
-              <View style={styles.card}>
-                <ThemedText style={styles.fieldLabel}>Dernière activité</ThemedText>
-                <ThemedText style={styles.sectionValue}>
-                  {new Date(profile.lastActivityAt).toLocaleDateString('fr-FR')}
-                </ThemedText>
-              </View>
-            ) : null}
+            <ActionButton
+              icon="👤"
+              title="MODIFIER LE PROFIL"
+              subtitle="Change ton nom ou ta ville"
+              color="#065f46"
+              onPress={startEdit}
+            />
 
-            {/* ── Actions ── */}
-            <Pressable style={styles.refreshButton} onPress={() => void refresh()}>
-              <ThemedText style={styles.buttonText}>Rafraichir</ThemedText>
-            </Pressable>
-            <Pressable style={styles.logoutButton} onPress={() => void handleLogout()}>
-              <ThemedText style={styles.buttonText}>Se deconnecter</ThemedText>
-            </Pressable>
+            <ActionButton
+              icon="📍"
+              title="RAFRAÎCHIR"
+              subtitle="Mettre à jour tes informations"
+              color="#92400e"
+              onPress={() => void refresh()}
+            />
+
+            <ActionButton
+              icon="🚪"
+              title="SE DÉCONNECTER"
+              subtitle="Quitter ton compte"
+              color="#0f3a5f"
+              onPress={() => void handleLogout()}
+            />
           </>
         ) : null}
       </ScrollView>
-    </ThemedView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#0b1220',
+    backgroundColor: '#06100a',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.38)',
   },
   content: {
-    gap: 12,
     padding: 16,
+    paddingTop: 48,
     paddingBottom: 36,
-  },
-  heroCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(30,41,59,0.86)',
-    padding: 16,
-    gap: 6,
-  },
-  kicker: {
-    color: '#34d399',
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    fontWeight: '700',
-  },
-  title: {
-    color: '#f8fafc',
-  },
-  subtitle: {
-    color: '#94a3b8',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  error: {
-    color: '#fda4af',
-    fontSize: 13,
+    gap: 14,
   },
 
-  // Avatar
-  avatarSection: {
+  topBar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
   },
-  avatarWrapper: {
-    position: 'relative',
-    width: 96,
-    height: 96,
+  iconButton: {
+    width: 54,
+    height: 54,
+    borderRadius: 14,
+    backgroundColor: '#1f160c',
+    borderWidth: 3,
+    borderColor: '#d97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconButtonText: {
+    color: '#fef3c7',
+    fontSize: 42,
+    fontWeight: '900',
+    lineHeight: 42,
+  },
+  settingsIcon: {
+    fontSize: 26,
+  },
+  titleWrap: {
+    alignItems: 'center',
+  },
+  pageTitle: {
+    color: '#facc15',
+    fontSize: 42,
+    fontWeight: '900',
+    letterSpacing: 2,
+    textShadowColor: '#78350f',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 2,
+  },
+  pageSubtitle: {
+    marginTop: -4,
+    color: '#bbf7d0',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+
+  error: {
+    color: '#fecaca',
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+
+  goldFrame: {
+    borderRadius: 24,
+    padding: 4,
+    shadowColor: '#facc15',
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  goldFrameInner: {
+    borderRadius: 20,
+    backgroundColor: 'rgba(8,38,30,0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    padding: 14,
+  },
+
+  profilePanel: {
+    marginTop: 4,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  avatarOuter: {
+    width: 104,
+    height: 104,
+    borderRadius: 999,
+    borderWidth: 4,
+    borderColor: '#facc15',
+    shadowColor: '#facc15',
+    shadowOpacity: 0.7,
+    shadowRadius: 18,
   },
   avatarImage: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 3,
-    borderColor: '#34d399',
+    width: '100%',
+    height: '100%',
+    borderRadius: 999,
   },
   avatarPlaceholder: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#1e3a5f',
-    borderWidth: 3,
-    borderColor: '#334155',
+    width: '100%',
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#123b36',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
-    fontSize: 38,
-    fontWeight: '700',
-    color: '#94a3b8',
+    color: '#facc15',
+    fontSize: 42,
+    fontWeight: '900',
   },
-  avatarEditBadge: {
+  cameraBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    right: -2,
+    bottom: -2,
+    width: 34,
+    height: 34,
+    borderRadius: 999,
     backgroundColor: '#0f766e',
+    borderWidth: 3,
+    borderColor: '#facc15',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#0b1220',
   },
-  avatarEditIcon: {
-    fontSize: 14,
-  },
-  avatarHint: {
-    fontSize: 12,
-    color: '#64748b',
-  },
-  deleteAvatarBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.4)',
-  },
-  deleteAvatarText: {
-    fontSize: 12,
-    color: '#f87171',
-    fontWeight: '600',
-  },
-
-  // Carte identité
-  card: {
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 14,
-    borderWidth: 1,
-    backgroundColor: 'rgba(30,41,59,0.82)',
-    gap: 10,
-    padding: 14,
-  },
-  identityRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  identityInfo: {
-    flex: 1,
-    gap: 3,
-  },
-  identityRight: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  name: {
-    color: '#f8fafc',
+  cameraIcon: {
     fontSize: 16,
   },
-  email: {
+  deleteAvatarText: {
+    marginTop: 10,
+    color: '#fca5a5',
     fontSize: 12,
-    color: '#64748b',
-  },
-  city: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  levelBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  levelText: {
-    fontWeight: '700',
-    color: '#fff',
-    fontSize: 11,
-  },
-  editBtn: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(52,211,153,0.4)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  editBtnText: {
-    fontSize: 12,
-    color: '#34d399',
-    fontWeight: '600',
+    fontWeight: '800',
+    textAlign: 'center',
   },
 
-  // Formulaire d'édition
-  sectionTitle: {
-    color: '#f8fafc',
-    fontSize: 14,
+  profileInfo: {
+    flex: 1,
+    gap: 4,
   },
-  fieldGroup: {
-    gap: 5,
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  fieldLabel: {
+  username: {
+    color: '#fff7ed',
+    fontSize: 22,
+    fontWeight: '900',
+    flexShrink: 1,
+  },
+  smallEditButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#164e43',
+    borderWidth: 2,
+    borderColor: '#d97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  smallEditText: {
+    color: '#fef3c7',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  email: {
+    color: '#fde68a',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  city: {
+    color: '#fbbf24',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  cityMuted: {
+    color: '#a3a3a3',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  xpLabel: {
+    marginTop: 6,
+    color: '#facc15',
     fontSize: 11,
-    color: '#64748b',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    fontWeight: '600',
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  xpBarOuter: {
+    height: 18,
+    borderRadius: 999,
+    backgroundColor: '#09090b',
+    borderWidth: 2,
+    borderColor: '#6b3a0c',
+    overflow: 'hidden',
+  },
+  xpBarInner: {
+    width: '65%',
+    height: '100%',
+    backgroundColor: '#84cc16',
+  },
+  xpPercent: {
+    position: 'absolute',
+    right: 8,
+    top: -1,
+    color: '#fef3c7',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  xpText: {
+    color: '#fef3c7',
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'right',
+  },
+
+  levelShield: {
+    width: 62,
+    height: 78,
+    borderRadius: 16,
+    backgroundColor: '#241607',
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelSmall: {
+    color: '#fef3c7',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  levelNumber: {
+    color: '#facc15',
+    fontSize: 24,
+    fontWeight: '900',
+  },
+
+  editTitle: {
+    color: '#facc15',
+    fontSize: 18,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  inputLabel: {
+    color: '#fef3c7',
+    fontSize: 11,
+    fontWeight: '900',
+    marginBottom: 5,
+    marginTop: 8,
   },
   input: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.3)',
-    backgroundColor: 'rgba(15,23,42,0.7)',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#92400e',
+    backgroundColor: '#111827',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#f8fafc',
+    color: '#fff',
     fontSize: 14,
+    fontWeight: '700',
   },
   editActions: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 4,
+    marginTop: 14,
   },
-  cancelBtn: {
+  cancelButton: {
     flex: 1,
-    borderRadius: 10,
-    paddingVertical: 11,
+    borderRadius: 12,
+    paddingVertical: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.3)',
+    backgroundColor: '#374151',
   },
-  cancelBtnText: {
-    color: '#94a3b8',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  saveBtn: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 11,
-    alignItems: 'center',
-    backgroundColor: '#0f766e',
-  },
-  saveBtnText: {
+  cancelText: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
+    fontWeight: '900',
+  },
+  saveButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#16a34a',
+  },
+  saveText: {
+    color: '#fff',
+    fontWeight: '900',
   },
 
-  // Stats
   statsGrid: {
     flexDirection: 'row',
-    gap: 10,
-  },
-  statBox: {
-    flex: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 12,
-    borderWidth: 1,
-    backgroundColor: 'rgba(30,41,59,0.82)',
-    padding: 12,
-    alignItems: 'center',
-    gap: 4,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#f8fafc',
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#64748b',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  sectionValue: {
-    color: '#f8fafc',
-    fontSize: 14,
-  },
-
-  // Rang
-  rankCard: {
-    borderColor: 'rgba(52,211,153,0.3)',
-    borderRadius: 14,
-    borderWidth: 1,
-    backgroundColor: 'rgba(15,118,110,0.15)',
-    padding: 14,
     gap: 8,
   },
-  rankKicker: {
-    fontSize: 10,
-    color: '#34d399',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+  statBorder: {
+    flex: 1,
+    borderRadius: 18,
+    padding: 3,
   },
+  statCard: {
+    minHeight: 122,
+    borderRadius: 15,
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  cardGloss: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    right: 8,
+    height: 22,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  statIcon: {
+    fontSize: 26,
+    marginBottom: 4,
+  },
+  statLabel: {
+    color: '#facc15',
+    fontSize: 10,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  statValue: {
+    color: '#fff7ed',
+    fontSize: 21,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  statSubtitle: {
+    color: '#fde68a',
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
   rankRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  rankMain: {
-    gap: 2,
+  rankTitle: {
+    color: '#facc15',
+    fontSize: 15,
+    fontWeight: '900',
   },
   rankNumber: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#f8fafc',
+    color: '#facc15',
+    fontSize: 38,
+    fontWeight: '900',
   },
   rankTotal: {
-    fontSize: 12,
-    color: '#94a3b8',
+    color: '#fef3c7',
+    fontSize: 13,
+    fontWeight: '800',
   },
   rankBadge: {
-    borderRadius: 999,
-    backgroundColor: '#0f766e',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    backgroundColor: '#14532d',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
   rankBadgeText: {
-    color: '#fff',
-    fontWeight: '700',
+    color: '#fef3c7',
     fontSize: 13,
+    fontWeight: '900',
   },
 
-  // Boutons
-  refreshButton: {
-    borderRadius: 12,
-    backgroundColor: '#059669',
-    paddingVertical: 13,
-    alignItems: 'center',
+  activityDate: {
+    marginTop: 6,
+    color: '#fde68a',
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 16,
   },
-  logoutButton: {
-    borderRadius: 12,
-    backgroundColor: '#be123c',
-    paddingVertical: 13,
-    alignItems: 'center',
+
+  actionBorder: {
+    borderRadius: 18,
+    padding: 3,
   },
-  buttonText: {
-    color: '#fff',
+  actionButton: {
+    minHeight: 74,
+    borderRadius: 15,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  actionIcon: {
+    fontSize: 30,
+  },
+  actionTextWrap: {
+    flex: 1,
+  },
+  actionTitle: {
+    color: '#fff7ed',
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  actionSubtitle: {
+    color: '#fde68a',
+    fontSize: 12,
     fontWeight: '700',
-    fontSize: 14,
+    marginTop: 2,
+  },
+  actionArrow: {
+    color: '#fef3c7',
+    fontSize: 42,
+    fontWeight: '900',
+  },
+  pressed: {
+    transform: [{ scale: 0.97 }, { translateY: 2 }],
   },
 });

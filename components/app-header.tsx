@@ -1,0 +1,103 @@
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+
+type Props = {};
+
+function CurrencyPill({ icon, value }: { icon: string; value: string }) {
+  return (
+    <LinearGradient colors={["#2b1b0a", "#0f0a05"]} style={styles.currencyPill}>
+      <Text style={styles.currencyIcon}>{icon}</Text>
+      <Text style={styles.currencyValue}>{value}</Text>
+      <View style={styles.plusButton}>
+        <Text style={styles.plusText}>+</Text>
+      </View>
+    </LinearGradient>
+  );
+}
+
+export function AppHeader(_: Props) {
+  const router = useRouter();
+
+  return (
+    <View style={styles.topBar}>
+      <View style={styles.playerBlock}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>🧭</Text>
+        </View>
+
+        <View>
+          <Text style={styles.playerRole}>EXPLORATEUR</Text>
+          <Text style={styles.playerLevel}>NIVEAU 27</Text>
+
+          <View style={styles.progressOuter}>
+            <View style={styles.progressInner} />
+            <Text style={styles.progressText}>65%</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.currencyGroup}>
+        <CurrencyPill icon="💎" value="320" />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  topBar: {
+    height: 74,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  playerBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  avatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 999,
+    borderWidth: 3,
+    borderColor: '#fbbf24',
+    backgroundColor: '#1f2937',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { fontSize: 26 },
+  playerRole: { color: '#fef3c7', fontSize: 10, fontWeight: '900' },
+  playerLevel: { color: '#fbbf24', fontSize: 14, fontWeight: '900' },
+  progressOuter: {
+    marginTop: 3,
+    width: 120,
+    height: 14,
+    borderRadius: 999,
+    backgroundColor: '#1c1208',
+    borderWidth: 1,
+    borderColor: '#a16207',
+    overflow: 'hidden',
+  },
+  progressInner: { width: '65%', height: '100%', backgroundColor: '#facc15' },
+  progressText: { position: 'absolute', right: 5, top: -1, color: '#fff', fontSize: 9, fontWeight: '900' },
+  currencyGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  currencyPill: {
+    height: 38,
+    minWidth: 92,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#b45309',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    gap: 5,
+  },
+  currencyIcon: { fontSize: 18 },
+  currencyValue: { color: '#fff7ed', fontSize: 13, fontWeight: '900' },
+  plusButton: { marginLeft: 'auto', width: 22, height: 22, borderRadius: 999, backgroundColor: '#84cc16', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#fef3c7' },
+  plusText: { color: '#fff', fontSize: 16, fontWeight: '900', lineHeight: 18 },
+});

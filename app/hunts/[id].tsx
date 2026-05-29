@@ -1,13 +1,23 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  ImageBackground,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { useApiResource } from '@/hooks/use-api-resource';
 import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
-import type { HuntReview } from '@/types/game';
+import type { HuntReview, Step } from '@/types/game';
+import HuntMapScreen from '../hunt-map/[id]';
 
 function dateLabel(dateString: string): string {
   const date = new Date(dateString);
@@ -16,6 +26,42 @@ function dateLabel(dateString: string): string {
   }
 
   return date.toLocaleString('fr-FR');
+}
+
+function stepIriToId(iri: string): number | null {
+  const match = iri.match(/\/steps\/(\d+)$/);
+  return match ? Number(match[1]) : null;
+}
+
+function GoldFrame({ children, style }: { children: React.ReactNode; style?: object }) {
+  return (
+    <LinearGradient colors={['#fff3a3', '#f59e0b', '#7c2d12']} style={[styles.goldFrame, style]}>
+      <View style={styles.goldFrameInner}>{children}</View>
+    </LinearGradient>
+  );
+}
+
+function GameButton({
+  icon,
+  title,
+  onPress,
+  colors,
+  disabled,
+}: {
+  icon: string;
+  title: string;
+  onPress: () => void;
+  colors?: [string, string, string];
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [pressed && styles.pressed, disabled && styles.disabled]}>
+      <LinearGradient colors={colors ?? ['#34d399', '#059669', '#064e3b']} style={styles.actionButton}>
+        <Text style={styles.actionIcon}>{icon}</Text>
+        <Text style={styles.actionText}>{title}</Text>
+      </LinearGradient>
+    </Pressable>
+  );
 }
 
 export default function HuntDetailScreen() {
@@ -35,14 +81,16 @@ export default function HuntDetailScreen() {
       throw new Error('Identifiant de chasse invalide');
     }
 
-    const [hunt, reviews, stats] = await Promise.all([
+    const [hunt, reviews, stats, steps, participations] = await Promise.all([
       lootopiaApi.getHunt(huntId),
       lootopiaApi.getHuntReviews(huntId),
       lootopiaApi.getHuntReviewStats(huntId),
+      lootopiaApi.getHuntSteps(huntId),
+      session?.userId ? lootopiaApi.getMyParticipations(session.userId).catch(() => []) : Promise.resolve([]),
     ]);
 
-    return { hunt, reviews, stats };
-  }, [huntId]);
+    return { hunt, reviews, stats, steps, participations };
+  }, [huntId, session?.userId]);
 
   const { data, error, loading, refresh } = useApiResource(loadData);
 
@@ -53,6 +101,33 @@ export default function HuntDetailScreen() {
 
     return Object.entries(data.stats.distribution).sort(([a], [b]) => Number(b) - Number(a));
   }, [data?.stats?.distribution]);
+
+  const steps = data?.steps ?? [];
+
+  const completedStepIds = useMemo<Set<number>>(() => {
+    if (!data?.participations?.length) return new Set();
+
+    const ids = new Set<number>();
+    for (const participation of data.participations) {
+      const stepId = stepIriToId(participation.step);
+      if (stepId !== null) ids.add(stepId);
+    }
+    return ids;
+  }, [data?.participations]);
+
+  const completedCount = useMemo(() => {
+    if (!steps.length) return 0;
+    return steps.filter((step) => completedStepIds.has(step.id)).length;
+  }, [steps, completedStepIds]);
+
+  const progressPercent = steps.length ? Math.min(100, Math.round((completedCount / steps.length) * 100)) : 0;
+
+  const currentStep = useMemo<Step | null>(() => {
+    if (!steps.length) return null;
+    return steps.find((step) => !completedStepIds.has(step.id)) ?? null;
+  }, [steps, completedStepIds]);
+
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const submitReview = async () => {
     const numericRating = Number(rating);
@@ -99,53 +174,105 @@ export default function HuntDetailScreen() {
     }
   };
 
+  if (isPlaying) {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ paddingTop: 48, paddingHorizontal: 12 }}>
+          <Pressable onPress={() => setIsPlaying(false)} style={{ padding: 8, alignSelf: 'flex-start' }}>
+            <Text style={{ color: '#fef3c7', fontSize: 20 }}>← Retour</Text>
+          </Pressable>
+        </View>
+        <HuntMapScreen />
+      </View>
+    );
+  }
+
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.heroCard}>
-          <ThemedText style={styles.kicker}>Mission</ThemedText>
-          <ThemedText type="title" style={styles.title}>Detail chasse</ThemedText>
-          <ThemedText style={styles.subtitle}>Consulte les infos terrain et partage ton avis de joueur.</ThemedText>
+    <ImageBackground
+      source={require('@/assets/images/illustration-saison-automne-dans-style-art-numerique_23-2151704540.jpg')}
+      style={styles.container}
+      resizeMode="cover"
+      imageStyle={styles.bgImage}
+    >
+      <View style={styles.bgOverlay} />
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.replace('/(tabs)')} style={styles.iconButton}>
+            <Text style={styles.backText}>‹</Text>
+          </Pressable>
+
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.kicker}>MISSION</Text>
+            <Text style={styles.title}>DÉTAIL CHASSE</Text>
+          </View>
         </View>
 
-        {loading ? <ActivityIndicator color="#34d399" /> : null}
-        {error ? <ThemedText style={styles.error}>Erreur: {error}</ThemedText> : null}
+        {loading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator color="#facc15" />
+            <Text style={styles.loadingText}>Chargement de la chasse...</Text>
+          </View>
+        ) : null}
+
+        {error ? <Text style={styles.error}>Erreur : {error}</Text> : null}
 
         {data?.hunt ? (
           <>
-            <View style={styles.card}>
-              <ThemedText type="subtitle" style={styles.whiteText}>{data.hunt.title}</ThemedText>
-              {data.hunt.description ? <ThemedText style={styles.whiteText}>{data.hunt.description}</ThemedText> : null}
-              <ThemedText style={styles.meta}>Ville: {data.hunt.city ?? '-'}</ThemedText>
-              <ThemedText style={styles.meta}>Cree le: {dateLabel(data.hunt.createdAt)}</ThemedText>
-              <ThemedText style={styles.meta}>Etat: {data.hunt.isActive ? 'Active' : 'Inactive'}</ThemedText>
-            </View>
+            <GoldFrame>
+              <Text style={styles.huntTitle}>{data.hunt.title}</Text>
+              {data.hunt.description ? <Text style={styles.huntDescription}>{data.hunt.description}</Text> : null}
+              <Text style={styles.meta}>📍 {data.hunt.city ?? 'Ville inconnue'}</Text>
+              <Text style={styles.meta}>🗓️ Créée le {dateLabel(data.hunt.createdAt)}</Text>
+              <Text style={styles.meta}>🎮 {data.hunt.isActive ? 'Active' : 'Inactive'}</Text>
+            </GoldFrame>
 
-            {/* Bouton carte interactive */}
-            <Pressable
-              style={({ pressed }) => [styles.mapButton, pressed && styles.mapButtonPressed]}
+            <GoldFrame>
+              <Text style={styles.ruleTitle}>🔐 RÈGLE DE PROGRESSION</Text>
+              <Text style={styles.ruleText}>
+                Cette chasse fonctionne étape par étape : les prochaines étapes restent cachées tant que l'étape actuelle n'est pas validée.
+              </Text>
+            </GoldFrame>
+
+            <GoldFrame>
+              <Text style={styles.sectionTitle}>📊 PROGRESSION</Text>
+              <View style={styles.progressBarOuter}>
+                <View style={[styles.progressBarInner, { width: `${progressPercent}%` }]} />
+                <Text style={styles.progressText}>{progressPercent}%</Text>
+              </View>
+              <Text style={styles.progressMeta}>{completedCount} / {steps.length} étapes validées</Text>
+              <Text style={styles.progressMeta}>
+                {currentStep ? `Étape actuelle : ${currentStep.orderNumber}` : 'Mission terminée'}
+              </Text>
+            </GoldFrame>
+
+            <GameButton icon="🎯" title="COMMENCER / REPRENDRE" 
+            // onPress={() => setIsPlaying(true)} 
+            onPress={() => router.push(`/hunt-play/${huntId}`)}
+            />
+
+            <GameButton
+              icon="🗺️"
+              title="VOIR LA CARTE"
               onPress={() => router.push(`/hunt-map/${huntId}`)}
-            >
-              <ThemedText style={styles.mapButtonText}>🗺️  Voir la carte interactive</ThemedText>
-            </Pressable>
+              colors={['#3b82f6', '#1d4ed8', '#1e3a5f']}
+            />
 
-            <View style={styles.card}>
-              <ThemedText type="defaultSemiBold" style={styles.whiteText}>Avis et notes</ThemedText>
-              <ThemedText style={styles.whiteText}>Note moyenne: {data.stats.averageRating.toFixed(1)} / 5</ThemedText>
-              <ThemedText style={styles.whiteText}>Total avis: {data.stats.totalReviews}</ThemedText>
+            <GoldFrame>
+              <Text style={styles.sectionTitle}>⭐ AVIS ET NOTES</Text>
+              <Text style={styles.meta}>Note moyenne : {data.stats.averageRating.toFixed(1)} / 5</Text>
+              <Text style={styles.meta}>Total avis : {data.stats.totalReviews}</Text>
               {sortedDistribution.map(([star, count]) => (
-                <ThemedText key={star} style={styles.meta}>
-                  {star} etoile(s): {count}
-                </ThemedText>
+                <Text key={star} style={styles.meta}>{star} étoile(s) : {count}</Text>
               ))}
-            </View>
+            </GoldFrame>
 
             {!hasReviewed.current ? (
-              <View style={styles.card}>
-                <ThemedText type="defaultSemiBold" style={styles.whiteText}>Poster un avis</ThemedText>
+              <GoldFrame>
+                <Text style={styles.sectionTitle}>✍️ LAISSER UN AVIS</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Note (1 a 5)"
+                  placeholder="Note (1 à 5)"
                   placeholderTextColor="#94a3b8"
                   value={rating}
                   keyboardType="number-pad"
@@ -161,73 +288,104 @@ export default function HuntDetailScreen() {
                   editable={!isSubmitting}
                   multiline
                 />
-                <Pressable style={styles.submitBtn} onPress={() => void submitReview()} disabled={isSubmitting}>
-                  <ThemedText style={styles.submitBtnText}>{isSubmitting ? 'Envoi...' : 'Publier'}</ThemedText>
-                </Pressable>
-              </View>
+                <GameButton icon="📨" title={isSubmitting ? 'ENVOI...' : 'PUBLIER'} onPress={() => void submitReview()} disabled={isSubmitting} />
+              </GoldFrame>
             ) : null}
 
-            <View style={styles.card}>
-              <ThemedText type="defaultSemiBold" style={styles.whiteText}>Commentaires</ThemedText>
+            <GoldFrame>
+              <Text style={styles.sectionTitle}>💬 COMMENTAIRES</Text>
 
-              {/* Review en attente de validation (soumis dans cette session) */}
               {pendingReview ? (
-                <View style={styles.pendingReviewLine}>
-                  <View style={styles.pendingBadgeRow}>
-                    <View style={styles.pendingBadge}>
-                      <ThemedText style={styles.pendingBadgeText}>⏳ En attente de validation</ThemedText>
-                    </View>
-                  </View>
-                  <ThemedText type="defaultSemiBold" style={styles.whiteText}>
-                    {pendingReview.user?.username ?? 'Toi'} • {pendingReview.rating}/5
-                  </ThemedText>
-                  <ThemedText style={styles.whiteText}>{pendingReview.comment}</ThemedText>
+                <View style={styles.reviewLine}>
+                  <Text style={styles.pendingBadgeText}>⏳ En attente de validation</Text>
+                  <Text style={styles.reviewUser}>{pendingReview.user?.username ?? 'Toi'} • {pendingReview.rating}/5</Text>
+                  <Text style={styles.reviewText}>{pendingReview.comment}</Text>
                 </View>
               ) : null}
 
-              {/* Reviews approuvés */}
               {data.reviews.length ? (
                 data.reviews.map((review) => (
                   <View key={review.id} style={styles.reviewLine}>
-                    <ThemedText type="defaultSemiBold" style={styles.whiteText}>
-                      {review.user?.username ?? 'Joueur'} • {review.rating}/5
-                    </ThemedText>
-                    <ThemedText style={styles.whiteText}>{review.comment}</ThemedText>
-                    <ThemedText style={styles.meta}>{dateLabel(review.createdAt)}</ThemedText>
+                    <Text style={styles.reviewUser}>{review.user?.username ?? 'Joueur'} • {review.rating}/5</Text>
+                    <Text style={styles.reviewText}>{review.comment}</Text>
+                    <Text style={styles.reviewDate}>{dateLabel(review.createdAt)}</Text>
                   </View>
                 ))
               ) : !pendingReview ? (
-                <ThemedText style={styles.whiteText}>Aucun avis approuve pour le moment.</ThemedText>
+                <Text style={styles.meta}>Aucun avis approuvé pour le moment.</Text>
               ) : null}
-            </View>
+            </GoldFrame>
 
-            <Pressable style={styles.refreshBtn} onPress={() => void refresh()}>
-              <ThemedText style={styles.submitBtnText}>Rafraichir</ThemedText>
-            </Pressable>
+            <GameButton
+              icon="↻"
+              title="RAFRAÎCHIR"
+              onPress={() => void refresh()}
+              colors={['#f59e0b', '#d97706', '#92400e']}
+            />
           </>
         ) : null}
       </ScrollView>
-    </ThemedView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0b1220',
+    backgroundColor: '#020617',
+  },
+  bgImage: {
+    opacity: 1,
+  },
+  bgOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.48)',
   },
   content: {
-    gap: 12,
+    gap: 14,
     padding: 16,
-    paddingBottom: 28,
+    paddingTop: 48,
+    paddingBottom: 36,
   },
-  heroCard: {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#1f160c',
+    borderWidth: 3,
+    borderColor: '#d97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backText: {
+    color: '#fef3c7',
+    fontSize: 42,
+    fontWeight: '900',
+    lineHeight: 42,
+  },
+  headerTextWrap: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  goldFrame: {
+    borderRadius: 24,
+    padding: 4,
+    shadowColor: '#facc15',
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  goldFrameInner: {
     borderRadius: 20,
+    backgroundColor: 'rgba(2,44,34,0.74)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(30,41,59,0.86)',
-    padding: 16,
-    gap: 6,
+    borderColor: 'rgba(45,212,191,0.22)',
+    padding: 14,
   },
   kicker: {
     color: '#34d399',
@@ -237,31 +395,108 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   title: {
-    color: '#f8fafc',
+    color: '#facc15',
+    fontSize: 26,
+    fontWeight: '900',
   },
-  subtitle: {
-    color: '#ffffff',
-    fontSize: 13,
-    lineHeight: 19,
+  loadingCard: {
+    borderRadius: 18,
+    padding: 20,
+    backgroundColor: 'rgba(2,44,34,0.72)',
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    color: '#fef3c7',
+    fontWeight: '800',
   },
   error: {
     color: '#fda4af',
     fontSize: 13,
+    textAlign: 'center',
+    fontWeight: '900',
   },
-  card: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(30,41,59,0.82)',
-    gap: 8,
-    padding: 12,
+  huntTitle: {
+    color: '#fff7ed',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  huntDescription: {
+    color: '#f1f5f9',
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 6,
+    marginBottom: 4,
   },
   meta: {
     fontSize: 12,
-    color: '#ffffff',
+    color: '#e2e8f0',
+    marginTop: 2,
+    fontWeight: '700',
   },
-  whiteText: {
+  ruleTitle: {
+    color: '#facc15',
+    fontSize: 16,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  ruleText: {
+    color: '#f1f5f9',
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: '700',
+  },
+  sectionTitle: {
+    color: '#facc15',
+    fontSize: 16,
+    fontWeight: '900',
+    marginBottom: 10,
+  },
+  progressBarOuter: {
+    height: 18,
+    borderRadius: 999,
+    backgroundColor: '#09090b',
+    borderWidth: 1,
+    borderColor: '#0f766e',
+    overflow: 'hidden',
+  },
+  progressBarInner: {
+    height: '100%',
+    backgroundColor: '#10b981',
+  },
+  progressText: {
+    position: 'absolute',
+    right: 8,
+    top: -1,
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  progressMeta: {
+    color: '#e2e8f0',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  actionButton: {
+    minHeight: 58,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#5eead4',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+  },
+  actionIcon: {
+    fontSize: 22,
+  },
+  actionText: {
     color: '#ffffff',
+    fontWeight: '900',
+    fontSize: 14,
+    letterSpacing: 0.6,
   },
   input: {
     borderRadius: 10,
@@ -271,71 +506,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: '#f8fafc',
+    fontWeight: '700',
+    marginBottom: 8,
   },
   inputMultiline: {
     minHeight: 90,
     textAlignVertical: 'top',
-  },
-  submitBtn: {
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: '#0f766e',
-  },
-  submitBtnText: {
-    color: '#fff',
-    fontWeight: '600',
   },
   reviewLine: {
     borderTopWidth: 1,
     borderTopColor: 'rgba(148,163,184,0.25)',
     paddingTop: 8,
     gap: 4,
+    marginTop: 4,
   },
-  refreshBtn: {
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: '#1e293b',
-  },
-  mapButton: {
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    backgroundColor: '#0f766e',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  mapButtonPressed: {
-    backgroundColor: '#0d9488',
-  },
-  mapButtonText: {
+  reviewUser: {
     color: '#fff',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  reviewText: {
+    color: '#e2e8f0',
+    fontSize: 13,
     fontWeight: '700',
-    fontSize: 15,
   },
-  pendingReviewLine: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(148,163,184,0.25)',
-    paddingTop: 8,
-    gap: 6,
+  reviewDate: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '700',
   },
-  pendingBadgeRow: {
-    flexDirection: 'row',
-  },
-  pendingBadge: {
+  pendingBadgeText: {
     backgroundColor: 'rgba(245,158,11,0.18)',
     borderWidth: 1,
     borderColor: 'rgba(245,158,11,0.5)',
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
-  },
-  pendingBadgeText: {
     fontSize: 11,
     color: '#fbbf24',
-    fontWeight: '600',
+    fontWeight: '800',
+    alignSelf: 'flex-start',
+  },
+  disabled: {
+    opacity: 0.5,
+  },
+  pressed: {
+    transform: [{ scale: 0.97 }, { translateY: 2 }],
+    opacity: 0.9,
   },
 });

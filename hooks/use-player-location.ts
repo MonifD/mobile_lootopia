@@ -8,9 +8,12 @@ export type PlayerLocationState = {
   isLoading: boolean;
 };
 
+const LOCATION_DISTANCE_INTERVAL_METERS = 5;
+const LOCATION_TIME_INTERVAL_MS = 1000;
+
 /**
  * Hook qui demande la permission GPS, récupère la position initiale
- * et surveille les mises à jour en temps réel (toutes les 5m de déplacement).
+ * et surveille les mises à jour en temps réel.
  *
  * Utilise expo-location — à installer si ce n'est pas déjà fait :
  *   npx expo install expo-location
@@ -48,12 +51,12 @@ export function usePlayerLocation(): PlayerLocationState {
           setIsLoading(false);
         }
 
-        // Surveillance en continu — se déclenche tous les 5m minimum
+        // Surveillance en continu — plus réactive pour le suivi sur carte.
         watchRef.current = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
-            distanceInterval: 5,      // m entre deux mises à jour
-            timeInterval: 3000,       // ms minimum entre deux mises à jour
+            distanceInterval: LOCATION_DISTANCE_INTERVAL_METERS,
+            timeInterval: LOCATION_TIME_INTERVAL_MS,
           },
           (loc) => {
             if (mounted) setLocation(loc);
