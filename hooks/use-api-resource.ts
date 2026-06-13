@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 
 export function useApiResource<T>(loader: () => Promise<T>) {
   const [data, setData] = useState<T | null>(null);
@@ -19,9 +20,12 @@ export function useApiResource<T>(loader: () => Promise<T>) {
     }
   }, [loader]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Recharge automatiquement les données à chaque fois que l'écran prend le focus
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
 
   return {
     data,

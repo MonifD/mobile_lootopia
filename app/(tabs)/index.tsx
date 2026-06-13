@@ -16,7 +16,7 @@ import { AppHeader } from '@/components/app-header';
 import { useApiResource } from '@/hooks/use-api-resource';
 import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
-import type { Hunt } from '@/types/game';
+import type { Hunt, HuntHistoryEntry } from '@/types/game';
 
 type FilterMode = 'my-city' | 'all';
 
@@ -54,13 +54,29 @@ function GoldFrame({ children, style }: { children: React.ReactNode; style?: obj
   );
 }
 
-function HuntCard({ hunt, onPress }: { hunt: Hunt; onPress: () => void }) {
+function HuntCard({ hunt, history, onPress }: { hunt: Hunt; history?: HuntHistoryEntry; onPress: () => void }) {
+  const progressPct   = history ? Math.round(history.progress * 100) : 0;
+  const isCompleted   = history?.status === 'completed';
+  const isInProgress  = history?.status === 'in_progress';
+
+  const progressLabel = isCompleted
+    ? '✓ Terminée'
+    : isInProgress
+      ? `${history!.stepsCompleted}/${history!.totalSteps} étapes`
+      : hunt.isActive
+        ? 'Prête à jouer'
+        : 'Inactive';
+
+  const progressColor = isCompleted ? '#4ade80' : isInProgress ? '#fbbf24' : '#10b981';
+
   return (
     <Pressable onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
       <GoldFrame style={!hunt.isActive ? styles.inactiveFrame : undefined}>
         <View style={styles.huntTop}>
           <View style={styles.huntIconBox}>
-            <Text style={styles.huntIcon}>{hunt.isActive ? '🗺️' : '🔒'}</Text>
+            <Text style={styles.huntIcon}>
+              {isCompleted ? '✅' : isInProgress ? '⏳' : hunt.isActive ? '🗺️' : '🔒'}
+            </Text>
           </View>
 
           <View style={styles.huntTitleWrap}>
@@ -102,10 +118,8 @@ function HuntCard({ hunt, onPress }: { hunt: Hunt; onPress: () => void }) {
 
         <View style={styles.cardBottom}>
           <View style={styles.progressOuter}>
-            <View style={[styles.progressInner, { width: hunt.isActive ? '72%' : '18%' }]} />
-            <Text style={styles.progressText}>
-              {hunt.isActive ? 'Prête à jouer' : 'Inactive'}
-            </Text>
+            <View style={[styles.progressInner, { width: `${progressPct}%` as `${number}%`, backgroundColor: progressColor }]} />
+            <Text style={styles.progressText}>{progressLabel}</Text>
           </View>
 
           <LinearGradient
@@ -126,28 +140,39 @@ export default function HuntsScreen() {
   const [filterMode, setFilterMode] = useState<FilterMode>('my-city');
 
   const loadData = useCallback(async () => {
-    const [hunts, profile] = await Promise.all([
+    const [hunts, profile, history] = await Promise.all([
       lootopiaApi.getHunts(),
       session?.userId
         ? lootopiaApi.getUser(session.userId).catch(() => null)
         : Promise.resolve(null),
+      session?.userId
+        ? lootopiaApi.getHuntHistory(session.userId).catch(() => [] as Awaited<ReturnType<typeof lootopiaApi.getHuntHistory>>)
+        : Promise.resolve([] as Awaited<ReturnType<typeof lootopiaApi.getHuntHistory>>),
     ]);
 
-    return { hunts, userCity: profile?.city ?? null };
+    // Map huntId → history entry pour accès O(1)
+    const historyByHuntId = new Map(history.map((e) => [e.hunt.id, e]));
+
+    return { hunts, userCity: profile?.city?.name ?? null, historyByHuntId };
   }, [session?.userId]);
 
   const { data, error, loading, refresh } = useApiResource(loadData);
 
-  const userCity = data?.userCity ?? null;
-  const allHunts = data?.hunts ?? [];
+  const userCity        = data?.userCity ?? null;
+  const allHunts        = data?.hunts ?? [];
+  const historyByHuntId = data?.historyByHuntId ?? new Map();
 
   const visibleHunts = useMemo<Hunt[]>(() => {
-    if (filterMode === 'all' || !userCity) return allHunts;
+    const notCompleted = allHunts.filter(
+      (hunt) => historyByHuntId.get(hunt.id)?.status !== 'completed'
+    );
 
-    return allHunts.filter(
+    if (filterMode === 'all' || !userCity) return notCompleted;
+
+    return notCompleted.filter(
       (hunt) => hunt.city?.toLowerCase().trim() === userCity.toLowerCase().trim()
     );
-  }, [allHunts, filterMode, userCity]);
+  }, [allHunts, filterMode, userCity, historyByHuntId]);
 
   const openHuntDetails = (hunt: Hunt) => {
     if (!Number.isFinite(hunt.id) || hunt.id <= 0) {
@@ -238,15 +263,11 @@ export default function HuntsScreen() {
           <HuntCard
             key={hunt.id}
             hunt={hunt}
+            history={historyByHuntId.get(hunt.id)}
             onPress={() => openHuntDetails(hunt)}
           />
         ))}
 
-        <Pressable onPress={() => void refresh()} style={({ pressed }) => pressed && styles.pressed}>
-          <LinearGradient colors={['#34d399', '#059669', '#065f46']} style={styles.refreshButton}>
-            <Text style={styles.refreshText}>RAFRAÎCHIR LES CHASSES</Text>
-          </LinearGradient>
-        </Pressable>
       </ScrollView>
     </GameBackground>
   );

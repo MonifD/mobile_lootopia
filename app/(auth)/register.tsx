@@ -2,7 +2,7 @@ import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     ImageBackground,
@@ -16,8 +16,10 @@ import {
     View,
 } from 'react-native';
 
-import { SUPPORTED_CITIES } from '@/constants/cities';
+import { lootopiaApi } from '@/services/lootopia-api';
 import { useAuth } from '@/providers/auth-provider';
+
+type ApiCity = { id: number; name: string; zipCode?: string; iri: string };
 
 function Nail({ style }: { style: object }) {
   return (
@@ -39,11 +41,41 @@ export default function RegisterScreen() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [city, setCity] = useState<string>(SUPPORTED_CITIES[0]);
-  const [cityOpen, setCityOpen] = useState(false);
+  const [cityQuery, setCityQuery] = useState('');
+  const [citySuggestions, setCitySuggestions] = useState<ApiCity[]>([]);
+  const [selectedCity, setSelectedCity] = useState<ApiCity | null>(null);
+  const [citySearching, setCitySearching] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (selectedCity) return; // ville déjà choisie, on ne relance pas
+
+    if (cityQuery.length < 2) {
+      setCitySuggestions([]);
+      return;
+    }
+
+    // Debounce 300ms
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => {
+      setCitySearching(true);
+      lootopiaApi.searchCities(cityQuery)
+        .then(setCitySuggestions)
+        .catch((err: unknown) => {
+          console.error('[searchCities] erreur:', err);
+          setCitySuggestions([]);
+        })
+        .finally(() => setCitySearching(false));
+    }, 300);
+
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
+  }, [cityQuery, selectedCity]);
 
   const orbitron = fontsLoaded ? 'Orbitron_700Bold' : undefined;
 
@@ -51,7 +83,8 @@ export default function RegisterScreen() {
     try {
       setError(null);
       setIsLoading(true);
-      await signUp(email, username, password, city);
+      // On envoie l'IRI (/api/cities/{id}) que le backend attend, pas le nom
+      await signUp(email, username, password, selectedCity?.iri);
       router.replace('/login');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Registration failed';
@@ -160,43 +193,62 @@ export default function RegisterScreen() {
                 <View style={styles.formGroup}>
                   <Text style={[styles.label, { fontFamily: orbitron }]}>VILLE</Text>
 
-                  <Pressable
-                    disabled={isLoading}
-                    onPress={() => setCityOpen((previous) => !previous)}
-                    style={({ pressed }) => [pressed && !isLoading && styles.pressed]}
-                  >
-                    <LinearGradient colors={['#120804', '#301706', '#120804']} style={styles.inputFrame}>
-                      <View style={styles.inputIconBox}>
-                        <Text style={styles.inputIcon}>📍</Text>
-                      </View>
+                  <LinearGradient colors={['#120804', '#301706', '#120804']} style={styles.inputFrame}>
+                    <View style={styles.inputIconBox}>
+                      <Text style={styles.inputIcon}>📍</Text>
+                    </View>
 
-                      <Text style={[styles.cityValueText, { fontFamily: orbitron }]}>{city}</Text>
-
-                      <View style={styles.eyeButton}>
-                        <Text style={styles.eyeText}>{cityOpen ? '▲' : '▼'}</Text>
-                      </View>
-                    </LinearGradient>
-                  </Pressable>
-
-                  {cityOpen ? (
-                    <View style={styles.cityDropdown}>
-                      {SUPPORTED_CITIES.map((item) => (
+                    {selectedCity ? (
+                      <>
+                        <Text style={[styles.cityValueText, { fontFamily: orbitron }]} numberOfLines={1}>
+                          {selectedCity.name}
+                          {selectedCity.zipCode ? ` (${selectedCity.zipCode})` : ''}
+                        </Text>
                         <Pressable
-                          key={item}
-                          onPress={() => {
-                            setCity(item);
-                            setCityOpen(false);
-                          }}
-                          style={({ pressed }) => [
-                            styles.cityOption,
-                            item === city && styles.cityOptionActive,
-                            pressed && styles.pressed,
-                          ]}
+                          onPress={() => { setSelectedCity(null); setCityQuery(''); setCitySuggestions([]); }}
+                          style={styles.eyeButton}
+                          disabled={isLoading}
                         >
-                          <Text style={[styles.cityOptionText, item === city && styles.cityOptionTextActive]}>{item}</Text>
+                          <Text style={styles.eyeText}>✕</Text>
+                        </Pressable>
+                      </>
+                    ) : (
+                      <>
+                        <TextInput
+                          style={[styles.input, { fontFamily: orbitron }]}
+                          placeholder="Rechercher une ville..."
+                          placeholderTextColor="rgba(255,220,150,0.38)"
+                          value={cityQuery}
+                          onChangeText={setCityQuery}
+                          editable={!isLoading}
+                          autoCapitalize="words"
+                        />
+                        {citySearching ? <ActivityIndicator size="small" color="#d97706" style={{ marginRight: 12 }} /> : null}
+                      </>
+                    )}
+                  </LinearGradient>
+
+                  {citySuggestions.length > 0 && !selectedCity ? (
+                    <View style={styles.cityDropdown}>
+                      {citySuggestions.map((item) => (
+                        <Pressable
+                          key={item.id}
+                          onPress={() => {
+                            setSelectedCity(item);
+                            setCityQuery('');
+                            setCitySuggestions([]);
+                          }}
+                          style={({ pressed }) => [styles.cityOption, pressed && styles.pressed]}
+                        >
+                          <Text style={styles.cityOptionText}>{item.name}</Text>
+                          {item.zipCode ? <Text style={styles.cityOptionZip}>{item.zipCode}</Text> : null}
                         </Pressable>
                       ))}
                     </View>
+                  ) : null}
+
+                  {cityQuery.length >= 2 && !citySearching && citySuggestions.length === 0 && !selectedCity ? (
+                    <Text style={styles.cityNoResult}>Aucune ville trouvée</Text>
                   ) : null}
                 </View>
 
@@ -521,6 +573,19 @@ const styles = StyleSheet.create({
   },
   cityOptionTextActive: {
     color: '#facc15',
+  },
+  cityOptionZip: {
+    color: '#9ca3af',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  cityNoResult: {
+    color: 'rgba(255,220,150,0.5)',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    paddingVertical: 8,
   },
   eyeButton: {
     width: 52,

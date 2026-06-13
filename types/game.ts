@@ -12,7 +12,7 @@ export type PlayerProfile = {
   id: number;
   email: string;
   username: string;
-  city: string | null;
+  city: { id: number; name: string; zipCode?: string } | null;
   avatarUrl: string | null;
   totalPoints: number;
   completedHunts: number;
@@ -100,4 +100,25 @@ export type Participation = {
   user: string;
   pointsEarned: number;
   completedAt: string | null;
+};
+
+export type HuntHistoryHunt = {
+  id: number;
+  title: string;
+  description: string | null;
+  isActive: boolean;
+  city: { id: number; name: string } | null;
+};
+
+export type HuntHistoryEntry = {
+  hunt: HuntHistoryHunt;
+  status: 'completed' | 'in_progress';
+  stepsCompleted: number;
+  totalSteps: number;
+  progress: number;
+  totalPoints: number;
+  startedAt: string;
+  lastActivityAt: string;
+  completedAt: string | null;
+  durationSeconds: number | null;
 };

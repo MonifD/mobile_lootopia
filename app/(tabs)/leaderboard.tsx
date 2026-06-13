@@ -1,4 +1,3 @@
-import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -73,21 +72,9 @@ export default function LeaderboardScreen() {
   const loadMyRank = useCallback(() => lootopiaApi.getMyRank(), []);
   const loadLeaderboardStats = useCallback(() => lootopiaApi.getLeaderboardStats(), []);
 
-  const entriesState = useApiResource(loadEntries);
+  const entriesState = useApiResource<LeaderboardEntry[]>(loadEntries);
   const myRankState = useApiResource(loadMyRank);
   const statsState = useApiResource(loadLeaderboardStats);
-
-  const { refresh: refreshEntries } = entriesState;
-  const { refresh: refreshMyRank } = myRankState;
-  const { refresh: refreshStats } = statsState;
-
-  useFocusEffect(
-    useCallback(() => {
-      void refreshEntries();
-      void refreshMyRank();
-      void refreshStats();
-    }, [refreshEntries, refreshMyRank, refreshStats])
-  );
 
   const entries = entriesState.data ?? [];
   const topThree = useMemo(() => entries.slice(0, 3), [entries]);
@@ -111,9 +98,7 @@ export default function LeaderboardScreen() {
             <Text style={styles.pageSubtitle}>DES CHASSEURS</Text>
           </View>
 
-          <Pressable onPress={() => void entriesState.refresh()} style={styles.iconButton}>
-            <Text style={styles.settingsIcon}>↻</Text>
-          </Pressable>
+          <View style={styles.iconButton} />
         </View>
 
         {entriesState.loading ? <ActivityIndicator color="#facc15" /> : null}
@@ -273,13 +258,6 @@ export default function LeaderboardScreen() {
           </View>
         ) : null}
 
-        <Pressable onPress={() => void entriesState.refresh()} style={({ pressed }) => pressed && styles.pressed}>
-          <LinearGradient colors={['#fff3a3', '#f59e0b', '#7c2d12']} style={styles.refreshBorder}>
-            <LinearGradient colors={['#065f46', '#132018']} style={styles.refreshButton}>
-              <Text style={styles.refreshText}>🧭 RAFRAÎCHIR</Text>
-            </LinearGradient>
-          </LinearGradient>
-        </Pressable>
       </ScrollView>
     </ImageBackground>
   );

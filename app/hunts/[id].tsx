@@ -316,12 +316,6 @@ export default function HuntDetailScreen() {
               ) : null}
             </GoldFrame>
 
-            <GameButton
-              icon="↻"
-              title="RAFRAÎCHIR"
-              onPress={() => void refresh()}
-              colors={['#f59e0b', '#d97706', '#92400e']}
-            />
           </>
         ) : null}
       </ScrollView>
