@@ -145,13 +145,15 @@ export default function HuntsScreen() {
       session?.userId
         ? lootopiaApi.getUser(session.userId).catch(() => null)
         : Promise.resolve(null),
-      lootopiaApi.getHuntHistory('all').catch(() => [] as Awaited<ReturnType<typeof lootopiaApi.getHuntHistory>>),
+      session?.userId
+        ? lootopiaApi.getHuntHistory(session.userId).catch(() => [] as Awaited<ReturnType<typeof lootopiaApi.getHuntHistory>>)
+        : Promise.resolve([] as Awaited<ReturnType<typeof lootopiaApi.getHuntHistory>>),
     ]);
 
     // Map huntId → history entry pour accès O(1)
     const historyByHuntId = new Map(history.map((e) => [e.hunt.id, e]));
 
-    return { hunts, userCity: profile?.city ?? null, historyByHuntId };
+    return { hunts, userCity: profile?.city?.name ?? null, historyByHuntId };
   }, [session?.userId]);
 
   const { data, error, loading, refresh } = useApiResource(loadData);

@@ -175,8 +175,10 @@ export default function AchievementsScreen() {
   }, [router, session?.userId, signOut]);
 
   const loadHuntHistory = useCallback(
-    () => lootopiaApi.getHuntHistory('all'),
-    [],
+    () => session?.userId
+      ? lootopiaApi.getHuntHistory(session.userId)
+      : Promise.resolve([] as Awaited<ReturnType<typeof lootopiaApi.getHuntHistory>>),
+    [session?.userId],
   );
 
   const { data: achievements, error: achError, loading: achLoading } = useApiResource(loadAchievements);
@@ -216,9 +218,9 @@ export default function AchievementsScreen() {
 
         {!huntLoading && inProgress.length === 0 ? (
           <GoldFrame>
-            <Text style={styles.emptyIcon}>🗺️</Text>
-            <Text style={styles.emptyTitle}>Aucune chasse en cours</Text>
-            <Text style={styles.emptyText}>Lance-toi dans une chasse pour la voir apparaître ici.</Text>
+            <Text style={styles.emptyIcon}>🔒</Text>
+            <Text style={styles.emptyTitle}>Bientôt disponible</Text>
+            <Text style={styles.emptyText}>Les chasses en cours seront visibles après la mise à jour d'authentification.</Text>
           </GoldFrame>
         ) : null}
 

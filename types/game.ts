@@ -12,7 +12,7 @@ export type PlayerProfile = {
   id: number;
   email: string;
   username: string;
-  city: string | null;
+  city: { id: number; name: string; zipCode?: string } | null;
   avatarUrl: string | null;
   totalPoints: number;
   completedHunts: number;

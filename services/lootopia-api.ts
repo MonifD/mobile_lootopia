@@ -365,7 +365,9 @@ function normalizeHunt(raw: unknown): Hunt {
     id,
     title: toString(source.title),
     description: toNullableString(source.description),
-    city: toNullableString(source.city),
+    city: typeof source.city === 'object' && source.city !== null
+      ? toNullableString((source.city as PrimitiveRecord)['name'])
+      : toNullableString(source.city),
     isActive,
     createdAt: toString(source.createdAt ?? source.created_at),
     updatedAt: toString(source.updatedAt ?? source.updated_at),
@@ -548,6 +550,17 @@ export const lootopiaApi = {
       });
     }),
 
+  searchCities: (q: string) =>
+    request<unknown>(`/cities/search?q=${encodeURIComponent(q)}`).then((payload) => {
+      const items = Array.isArray(payload) ? payload : unwrapCollection<unknown>(payload);
+      return (items as PrimitiveRecord[]).map((source) => ({
+        id: toNumber(source['id']),
+        name: toString(source['name']),
+        zipCode: toString(source['zipCode']),
+        iri: `/api/cities/${toNumber(source['id'])}`,
+      }));
+    }),
+
   register: (payload: RegisterPayload) =>
     request<PlayerProfile>('/users', {
       method: 'POST',
@@ -707,8 +720,8 @@ export const lootopiaApi = {
   getHuntReviewStats: (huntId: number) =>
     request<unknown>(`/hunts/${huntId}/reviews/stats`).then((payload) => normalizeReviewStats(payload)),
 
-  getHuntHistory: (status: 'all' | 'completed' | 'in_progress' = 'all', limit = 100) =>
-    request<unknown>(`/users/me/hunt-history?status=${status}&limit=${limit}`).then((payload) => {
+  getHuntHistory: (userId: number, limit = 100) =>
+    request<unknown>(`/users/${userId}/hunt-history?limit=${limit}`).then((payload) => {
       const raw = (payload ?? {}) as Record<string, unknown>;
       const items = Array.isArray(raw['data']) ? (raw['data'] as unknown[]) : unwrapCollection<unknown>(payload);
       return items.map((entry) => {

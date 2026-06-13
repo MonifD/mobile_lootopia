@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
     ImageBackground,
@@ -72,7 +72,7 @@ export default function LeaderboardScreen() {
   const loadMyRank = useCallback(() => lootopiaApi.getMyRank(), []);
   const loadLeaderboardStats = useCallback(() => lootopiaApi.getLeaderboardStats(), []);
 
-  const entriesState = useApiResource(loadEntries);
+  const entriesState = useApiResource<LeaderboardEntry[]>(loadEntries);
   const myRankState = useApiResource(loadMyRank);
   const statsState = useApiResource(loadLeaderboardStats);
 

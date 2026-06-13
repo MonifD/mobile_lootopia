@@ -2,7 +2,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -137,7 +137,11 @@ export default function ProfileScreen() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editUsername, setEditUsername] = useState('');
-  const [editCity, setEditCity] = useState('');
+  const [editCity, setEditCity] = useState<{ id: number; name: string; zipCode?: string } | null>(null);
+  const [cityQuery, setCityQuery] = useState('');
+  const [citySuggestions, setCitySuggestions] = useState<{ id: number; name: string; zipCode?: string }[]>([]);
+  const [citySearching, setCitySearching] = useState(false);
+  const citySearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
@@ -181,28 +185,51 @@ export default function ProfileScreen() {
     return `Top ${Math.round(100 - p)}%`;
   }, [rank]);
 
+  // Autocomplete ville dans le formulaire d'édition
+  useEffect(() => {
+    if (editCity) return;
+    if (cityQuery.length < 2) { setCitySuggestions([]); return; }
+    if (citySearchTimeout.current) clearTimeout(citySearchTimeout.current);
+    citySearchTimeout.current = setTimeout(() => {
+      setCitySearching(true);
+      lootopiaApi.searchCities(cityQuery)
+        .then(setCitySuggestions)
+        .catch(() => setCitySuggestions([]))
+        .finally(() => setCitySearching(false));
+    }, 300);
+    return () => { if (citySearchTimeout.current) clearTimeout(citySearchTimeout.current); };
+  }, [cityQuery, editCity]);
+
   const startEdit = () => {
     setEditUsername(profile?.username ?? '');
-    setEditCity(profile?.city ?? '');
+    setEditCity(profile?.city ?? null);
+    setCityQuery(profile?.city?.name ?? '');
+    setCitySuggestions([]);
     setIsEditing(true);
   };
 
-  const cancelEdit = () => setIsEditing(false);
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setCitySuggestions([]);
+  };
 
   const saveProfile = async () => {
     if (!session?.userId) return;
 
     const trimmedUsername = editUsername.trim();
-    const trimmedCity = editCity.trim();
 
     if (!trimmedUsername) {
-      Alert.alert('Validation', 'Le nom d’utilisateur ne peut pas être vide.');
+      Alert.alert('Validation', "Le nom d'utilisateur ne peut pas être vide.");
       return;
     }
 
     const patch: { username?: string; city?: string } = {};
     if (trimmedUsername !== profile?.username) patch.username = trimmedUsername;
-    if (trimmedCity !== (profile?.city ?? '')) patch.city = trimmedCity || undefined;
+    const newCityId = editCity?.id ?? null;
+    const oldCityId = profile?.city?.id ?? null;
+    if (newCityId !== oldCityId) {
+      patch.city = editCity ? `/api/cities/${editCity.id}` : undefined;
+    }
 
     if (Object.keys(patch).length === 0) {
       setIsEditing(false);
@@ -228,7 +255,7 @@ export default function ProfileScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (status !== 'granted') {
-      Alert.alert('Permission requise', 'Autorise l’accès à ta galerie dans les réglages.');
+      Alert.alert('Permission requise', "Autorise l'accès à ta galerie dans les réglages.");
       return;
     }
 
@@ -259,8 +286,8 @@ export default function ProfileScreen() {
 
   const confirmDeleteAvatar = () => {
     Alert.alert(
-      'Supprimer l’avatar',
-      'Es-tu sûr de vouloir supprimer ta photo de profil ?',
+      "Supprimer l'avatar",
+      "Es-tu sûr de vouloir supprimer ta photo de profil ?",
       [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Supprimer', style: 'destructive', onPress: deleteAvatar },
@@ -357,7 +384,7 @@ export default function ProfileScreen() {
                   <Text style={styles.email}>{profile.email}</Text>
 
                   {profile.city ? (
-                    <Text style={styles.city}>📍 {profile.city}</Text>
+                    <Text style={styles.city}>📍 {profile.city.name}</Text>
                   ) : (
                     <Text style={styles.cityMuted}>📍 Ville non renseignée</Text>
                   )}
@@ -402,7 +429,7 @@ export default function ProfileScreen() {
               <GoldFrame>
                 <Text style={styles.editTitle}>MODIFIER LE PROFIL</Text>
 
-                <Text style={styles.inputLabel}>Nom d’utilisateur</Text>
+                <Text style={styles.inputLabel}>Nom d'utilisateur</Text>
                 <TextInput
                   style={styles.input}
                   value={editUsername}
@@ -414,14 +441,45 @@ export default function ProfileScreen() {
                 />
 
                 <Text style={styles.inputLabel}>Ville</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editCity}
-                  onChangeText={setEditCity}
-                  placeholder="Ta ville"
-                  placeholderTextColor="#9ca3af"
-                  editable={!isSaving}
-                />
+                {editCity ? (
+                  <View style={styles.citySelectedRow}>
+                    <Text style={styles.citySelectedText}>📍 {editCity.name}{editCity.zipCode ? ` (${editCity.zipCode})` : ''}</Text>
+                    <Pressable onPress={() => { setEditCity(null); setCityQuery(''); }}>
+                      <Text style={styles.cityClear}>✕</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View>
+                    <TextInput
+                      style={styles.input}
+                      value={cityQuery}
+                      onChangeText={setCityQuery}
+                      placeholder="Rechercher une ville..."
+                      placeholderTextColor="#9ca3af"
+                      editable={!isSaving}
+                    />
+                    {citySearching ? (
+                      <ActivityIndicator size="small" color="#f59e0b" style={{ marginTop: 4 }} />
+                    ) : null}
+                    {citySuggestions.length > 0 ? (
+                      <View style={styles.citySuggestions}>
+                        {citySuggestions.map((item) => (
+                          <Pressable
+                            key={item.id}
+                            style={styles.citySuggestionItem}
+                            onPress={() => { setEditCity(item); setCityQuery(item.name); setCitySuggestions([]); }}
+                          >
+                            <Text style={styles.citySuggestionName}>{item.name}</Text>
+                            {item.zipCode ? <Text style={styles.citySuggestionZip}>{item.zipCode}</Text> : null}
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+                    {cityQuery.length >= 2 && !citySearching && citySuggestions.length === 0 ? (
+                      <Text style={styles.cityNoResult}>Aucune ville trouvée</Text>
+                    ) : null}
+                  </View>
+                )}
 
                 <View style={styles.editActions}>
                   <Pressable style={styles.cancelButton} onPress={cancelEdit} disabled={isSaving}>
@@ -700,6 +758,56 @@ const styles = StyleSheet.create({
     color: '#a3a3a3',
     fontSize: 13,
     fontWeight: '700',
+  },
+  citySelectedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1a2a1a',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 4,
+  },
+  citySelectedText: {
+    color: '#fbbf24',
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+  cityClear: {
+    color: '#f87171',
+    fontSize: 16,
+    fontWeight: '700',
+    paddingLeft: 10,
+  },
+  citySuggestions: {
+    backgroundColor: '#1a2a1a',
+    borderRadius: 8,
+    marginTop: 2,
+    overflow: 'hidden',
+  },
+  citySuggestionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2d3d2d',
+  },
+  citySuggestionName: {
+    color: '#e5e7eb',
+    fontSize: 14,
+  },
+  citySuggestionZip: {
+    color: '#9ca3af',
+    fontSize: 13,
+  },
+  cityNoResult: {
+    color: '#9ca3af',
+    fontSize: 13,
+    marginTop: 6,
+    textAlign: 'center',
   },
   xpLabel: {
     marginTop: 6,
