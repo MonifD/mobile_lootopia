@@ -16,7 +16,7 @@ import { AppHeader } from '@/components/app-header';
 import { useApiResource } from '@/hooks/use-api-resource';
 import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
-import type { Hunt, HuntHistoryEntry } from '@/types/game';
+import type { Hunt, HuntHistoryEntry, Participation, Step } from '@/types/game';
 
 type FilterMode = 'my-city' | 'all';
 
@@ -140,18 +140,80 @@ export default function HuntsScreen() {
   const [filterMode, setFilterMode] = useState<FilterMode>('my-city');
 
   const loadData = useCallback(async () => {
-    const [hunts, profile, history] = await Promise.all([
+    const [hunts, profile, history, participations, allSteps] = await Promise.all([
       lootopiaApi.getHunts(),
       session?.userId
         ? lootopiaApi.getUser(session.userId).catch(() => null)
         : Promise.resolve(null),
       session?.userId
-        ? lootopiaApi.getHuntHistory(session.userId).catch(() => [] as Awaited<ReturnType<typeof lootopiaApi.getHuntHistory>>)
-        : Promise.resolve([] as Awaited<ReturnType<typeof lootopiaApi.getHuntHistory>>),
+        ? lootopiaApi.getHuntHistory(session.userId).catch(() => [] as HuntHistoryEntry[])
+        : Promise.resolve([] as HuntHistoryEntry[]),
+      session?.userId
+        ? lootopiaApi.getMyParticipations(session.userId).catch(() => [] as Participation[])
+        : Promise.resolve([] as Participation[]),
+      lootopiaApi.getAllSteps().catch(() => [] as Step[]),
     ]);
 
-    // Map huntId → history entry pour accès O(1)
+    // Map huntId → history entry (chasses terminées depuis l'API publique)
     const historyByHuntId = new Map(history.map((e) => [e.hunt.id, e]));
+
+    // Construire des entrées synthétiques pour les chasses en cours
+    if (session?.userId && allSteps.length > 0 && participations.length > 0) {
+      // IRI d'étape → huntId
+      const stepToHuntId = new Map<string, number>();
+      // huntId → nombre total d'étapes
+      const huntTotalSteps = new Map<number, number>();
+
+      for (const step of allSteps) {
+        if (step.hunt) {
+          const match = step.hunt.match(/\/(\d+)$/);
+          if (match) {
+            const huntId = parseInt(match[1], 10);
+            const stepIri = `/api/steps/${step.id}`;
+            stepToHuntId.set(stepIri, huntId);
+            huntTotalSteps.set(huntId, (huntTotalSteps.get(huntId) ?? 0) + 1);
+          }
+        }
+      }
+
+      // huntId → nombre d'étapes complétées
+      const huntCompletedCount = new Map<number, number>();
+      for (const p of participations) {
+        const huntId = stepToHuntId.get(p.step);
+        if (huntId !== undefined) {
+          huntCompletedCount.set(huntId, (huntCompletedCount.get(huntId) ?? 0) + 1);
+        }
+      }
+
+      // Pour chaque chasse avec des participations non encore dans l'historique → en cours
+      for (const [huntId, completedCount] of huntCompletedCount) {
+        if (!historyByHuntId.has(huntId)) {
+          const totalSteps = huntTotalSteps.get(huntId) ?? 0;
+          const progress = totalSteps > 0 ? completedCount / totalSteps : 0;
+          const hunt = hunts.find((h) => h.id === huntId);
+          if (hunt) {
+            historyByHuntId.set(huntId, {
+              hunt: {
+                id: hunt.id,
+                title: hunt.title,
+                description: hunt.description,
+                isActive: hunt.isActive,
+                city: null,
+              },
+              status: 'in_progress',
+              stepsCompleted: completedCount,
+              totalSteps,
+              progress,
+              totalPoints: 0,
+              startedAt: '',
+              lastActivityAt: '',
+              completedAt: null,
+              durationSeconds: null,
+            });
+          }
+        }
+      }
+    }
 
     return { hunts, userCity: profile?.city?.name ?? null, historyByHuntId };
   }, [session?.userId]);
