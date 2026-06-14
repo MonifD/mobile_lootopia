@@ -1,9 +1,10 @@
 import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { DeviceEventEmitter } from 'react-native';
 
 const GEMS_INITIAL = 100;
 const GEMS_PER_HUNT = 10;
+const GEMS_EVENT = 'lootopia:gemsUpdated';
 
 function gemsKey(userId: number): string {
   return `lootopia.gems.${userId}`;
@@ -11,10 +12,6 @@ function gemsKey(userId: number): string {
 
 async function readGems(userId: number): Promise<number> {
   try {
-    if (Platform.OS === 'web') {
-      const raw = window.localStorage.getItem(gemsKey(userId));
-      return raw !== null ? parseInt(raw, 10) : GEMS_INITIAL;
-    }
     const raw = await SecureStore.getItemAsync(gemsKey(userId));
     return raw !== null ? parseInt(raw, 10) : GEMS_INITIAL;
   } catch {
@@ -24,10 +21,6 @@ async function readGems(userId: number): Promise<number> {
 
 async function writeGems(userId: number, value: number): Promise<void> {
   try {
-    if (Platform.OS === 'web') {
-      window.localStorage.setItem(gemsKey(userId), String(value));
-      return;
-    }
     await SecureStore.setItemAsync(gemsKey(userId), String(value));
   } catch {}
 }
@@ -35,12 +28,6 @@ async function writeGems(userId: number, value: number): Promise<void> {
 /** Initialise à 100 si la clé n'existe pas encore (premier login). */
 export async function initGems(userId: number): Promise<void> {
   try {
-    if (Platform.OS === 'web') {
-      if (window.localStorage.getItem(gemsKey(userId)) === null) {
-        window.localStorage.setItem(gemsKey(userId), String(GEMS_INITIAL));
-      }
-      return;
-    }
     const existing = await SecureStore.getItemAsync(gemsKey(userId));
     if (existing === null) {
       await SecureStore.setItemAsync(gemsKey(userId), String(GEMS_INITIAL));
@@ -48,28 +35,39 @@ export async function initGems(userId: number): Promise<void> {
   } catch {}
 }
 
-/** Ajoute `amount` gemmes et retourne le nouveau total. */
+/** Ajoute `amount` gemmes, persiste, et notifie tous les hooks useGems actifs. */
 export async function addGems(userId: number, amount: number): Promise<number> {
   const current = await readGems(userId);
   const next = current + amount;
   await writeGems(userId, next);
+  DeviceEventEmitter.emit(GEMS_EVENT, { userId, gems: next });
   return next;
 }
 
-/** Hook React pour lire et mettre à jour les gemmes d'un utilisateur. */
+/** Hook React — se met à jour automatiquement quand addGems est appelé. */
 export function useGems(userId: number | null | undefined) {
   const [gems, setGems] = useState(GEMS_INITIAL);
 
   useEffect(() => {
     if (!userId) return;
+
+    // Lecture initiale
     readGems(userId).then(setGems);
+
+    // Écoute les mises à jour émises par addGems
+    const sub = DeviceEventEmitter.addListener(
+      GEMS_EVENT,
+      ({ userId: uid, gems: g }: { userId: number; gems: number }) => {
+        if (uid === userId) setGems(g);
+      }
+    );
+
+    return () => sub.remove();
   }, [userId]);
 
-  /** Appelé quand l'utilisateur termine une chasse : +10 gemmes. */
   const onHuntCompleted = useCallback(async () => {
     if (!userId) return;
-    const next = await addGems(userId, GEMS_PER_HUNT);
-    setGems(next);
+    await addGems(userId, GEMS_PER_HUNT);
   }, [userId]);
 
   return { gems, onHuntCompleted };

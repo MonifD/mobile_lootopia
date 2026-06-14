@@ -246,17 +246,20 @@ export default function HuntDetailScreen() {
               </Text>
             </GoldFrame>
 
-            <GameButton icon="🎯" title="COMMENCER / REPRENDRE" 
-            // onPress={() => setIsPlaying(true)} 
-            onPress={() => router.push(`/hunt-play/${huntId}`)}
-            />
+{completedCount > 0 && completedCount < steps.length ? (
+  <GameButton
+    icon="🎯"
+    title="REPRENDRE"
+    onPress={() => router.push(`/hunt-play/${huntId}`)}
+  />
+) : null}
 
-            <GameButton
-              icon="🗺️"
-              title="VOIR LA CARTE"
-              onPress={() => router.push(`/hunt-map/${huntId}`)}
-              colors={['#3b82f6', '#1d4ed8', '#1e3a5f']}
-            />
+<GameButton
+  icon="🗺️"
+  title="VOIR LA CARTE"
+  onPress={() => router.push(`/hunt-map/${huntId}`)}
+  colors={['#3b82f6', '#1d4ed8', '#1e3a5f']}
+/>
 
             <GoldFrame>
               <Text style={styles.sectionTitle}>⭐ AVIS ET NOTES</Text>
