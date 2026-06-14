@@ -490,20 +490,13 @@ const doneStepIds = useMemo<Set<number>>(() => {
             <View style={[styles.legendDot, { backgroundColor: '#0f766e' }]} />
             <ThemedText style={styles.legendText}>Étape à portée</ThemedText>
           </View>
-{/* 
-{doneStepIds.size > 0 ? (
-  <View style={styles.legendItem}>
-    <View style={[styles.legendDot, { backgroundColor: '#16a34a' }]} />
-    <ThemedText style={styles.legendText}>Étape validée ✓</ThemedText>
-  </View>
-) : null} */}
 
-{selectedStep && doneStepIds.has(selectedStep.id) ? (
-  <View style={styles.legendItem}>
-    <View style={[styles.legendDot, { backgroundColor: '#16a34a' }]} />
-    <ThemedText style={styles.legendText}>Étape validée ✓</ThemedText>
-  </View>
-) : null}
+        {selectedStep && doneStepIds.has(selectedStep.id) ? (
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#16a34a' }]} />
+            <ThemedText style={styles.legendText}>Étape validée ✓</ThemedText>
+          </View>
+        ) : null}
 
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
