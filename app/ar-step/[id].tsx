@@ -1,268 +1,415 @@
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useCameraPermissions } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Pressable,
   StyleSheet,
   Text,
-  View
+  View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 import { useApiResource } from '@/hooks/use-api-resource';
-import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
 
-const STEP_POINTS_REWARD = 10;
-const WEBVIEW_TIMEOUT_MS = 5000;
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type ArEvent =
+  | { type: 'MARKER_FOUND' }
+  | { type: 'MARKER_LOST' }
+  | { type: 'VALIDATE_CONFIRMED' };
+
+type GamePhase = 'searching' | 'detected' | 'countdown' | 'validated';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const COUNTDOWN_SECONDS = 4;
+
+const SEARCH_MESSAGES = [
+  '🗺️  Les anciens parlent d\'un marqueur caché ici…',
+  '🔦  Tourne-toi lentement, il se cache dans l\'ombre.',
+  '⚓  Le trésor attend que tu le trouves…',
+  '🧭  Rapproche-toi. Tu brûles.',
+  '🌑  Quelque chose de puissant est tout près…',
+  '🕯️  Le marqueur révèle ses secrets aux persévérants.',
+];
+
+// ─── HTML Builder ─────────────────────────────────────────────────────────────
 
 function buildArHtml(markerPatternUrl?: string | null): string {
-  const hasPattern = typeof markerPatternUrl === 'string' && markerPatternUrl.trim().length > 0;
-  const safeMarkerUrl = hasPattern ? markerPatternUrl.replace(/"/g, '&quot;') : null;
+  const hasPattern =
+    typeof markerPatternUrl === 'string' && markerPatternUrl.trim().length > 0;
+  const safeMarkerUrl = hasPattern
+    ? markerPatternUrl!.replace(/"/g, '&quot;')
+    : null;
 
-  const markerStartTag = hasPattern
+  const markerTag = hasPattern
     ? `<a-marker type="pattern" url="${safeMarkerUrl}">`
     : '<a-marker preset="hiro">';
 
-  const hintMessage = hasPattern
-    ? 'Aligne le marqueur de cette étape devant la caméra.'
-    : 'Mode test actif : utilise le marker HIRO pour tester la RA.';
-return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 
-<script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-<script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <script>
+    // Pre-request camera BEFORE AR.js loads — unblocks WebView permission on Android
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+        .then(function(stream) {
+          stream.getTracks().forEach(function(t) { t.stop(); });
+        })
+        .catch(function(e) { console.warn('Pre-camera request:', e); });
+    }
+  </script>
 
-    <style>
-      html, body {
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        background: #000;
-        width: 100%;
-        height: 100%;
-      }
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
 
-      #hint {
-        position: fixed;
-        left: 12px;
-        right: 12px;
-        bottom: 12px;
-        z-index: 9999;
-        font-family: Arial, sans-serif;
-        font-size: 13px;
-        font-weight: 700;
-        color: #e5e7eb;
-        background: rgba(2, 6, 23, 0.82);
-        border: 1px solid rgba(34, 197, 94, 0.45);
-        border-radius: 10px;
-        padding: 10px;
-        text-align: center;
-      }
+  <style>
+    html, body { margin:0; padding:0; overflow:hidden; background:#000; width:100%; height:100%; }
 
-      #status {
-        position: fixed;
-        top: 12px;
-        left: 12px;
-        right: 12px;
-        z-index: 9999;
-        font-family: Arial, sans-serif;
-        font-size: 14px;
-        font-weight: 900;
-        color: #fef3c7;
-        background: rgba(15, 23, 42, 0.88);
-        border: 1px solid rgba(250, 204, 21, 0.55);
-        border-radius: 10px;
-        padding: 10px;
-        text-align: center;
-      }
-    </style>
-  </head>
+    #overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 9999;
+      font-family: Arial, sans-serif;
+    }
 
-  <body>
-    <div id="status">📷 Cherche le marker...</div>
-    <div id="hint">${hintMessage}</div>
+    #status {
+      position: absolute;
+      top: 10px; left: 10px; right: 10px;
+      background: rgba(10,10,20,0.85);
+      border: 1px solid rgba(250,204,21,0.4);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #fef3c7;
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+      transition: all 0.4s ease;
+    }
 
-    <a-scene
-      embedded
-      vr-mode-ui="enabled: false"
-      renderer="logarithmicDepthBuffer: true; colorManagement: true;"
-      arjs="sourceType: webcam; debugUIEnabled: false;"
-    >
-      ${markerStartTag}
-        <a-box
-          position="0 0.5 0"
-          scale="1 1 1"
-          material="color: #06b6d4; metalness: 0.25; roughness: 0.45;"
-          animation="property: rotation; to: 0 360 0; loop: true; dur: 2500"
-        ></a-box>
+    #status.found {
+      border-color: rgba(34,197,94,0.8);
+      color: #bbf7d0;
+      background: rgba(5,46,22,0.9);
+    }
 
-        <a-text
-          value="Loot trouvé"
-          color="#facc15"
-          align="center"
-          position="0 1.4 0"
-          rotation="-90 0 0"
-          width="3"
-        ></a-text>
-      </a-marker>
+    /* Scan frame corners */
+    #frame {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 220px; height: 220px;
+    }
+    #frame .corner {
+      position: absolute;
+      width: 28px; height: 28px;
+      border-color: rgba(250,204,21,0.8);
+      border-style: solid;
+    }
+    #frame .tl { top:0; left:0;  border-width:3px 0 0 3px; }
+    #frame .tr { top:0; right:0; border-width:3px 3px 0 0; }
+    #frame .bl { bottom:0; left:0;  border-width:0 0 3px 3px; }
+    #frame .br { bottom:0; right:0; border-width:0 3px 3px 0; }
 
-      <a-entity camera></a-entity>
-    </a-scene>
+    #frame.found .corner { border-color: rgba(34,197,94,0.9); animation: pulse-found 0.6s ease-in-out infinite alternate; }
+    @keyframes pulse-found { from { opacity:0.6; } to { opacity:1; } }
 
-    <script>
-      const marker = document.querySelector('a-marker');
-      const status = document.getElementById('status');
+    /* Scan line animation */
+    #scanline {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 210px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(250,204,21,0.7), transparent);
+      animation: scan 2s ease-in-out infinite;
+    }
+    #scanline.found { display: none; }
+    @keyframes scan {
+      0%   { margin-top: -100px; }
+      50%  { margin-top:  100px; }
+      100% { margin-top: -100px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <div id="status">📷 Cherche le marqueur…</div>
+    <div id="frame">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+    </div>
+    <div id="scanline"></div>
+  </div>
 
-      marker.addEventListener('markerFound', () => {
-        status.innerText = '✅ Marker détecté !';
-        status.style.borderColor = 'rgba(34, 197, 94, 0.8)';
-        status.style.color = '#bbf7d0';
-      });
+  <a-scene
+    embedded
+    vr-mode-ui="enabled: false"
+    renderer="logarithmicDepthBuffer: true; colorManagement: true;"
+    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+  >
+    ${markerTag}
+      <a-box
+        id="loot-box"
+        position="0 0.5 0"
+        scale="0.5 0.5 0.5"
+        material="color: #06b6d4; emissive: #0e7490; emissiveIntensity: 0.4;"
+        animation__rot="property: rotation; to: 0 360 0; loop: true; dur: 2000; easing: linear;"
+        animation__scale="property: scale; to: 1 1 1; dur: 800; easing: easeOutElastic;"
+      ></a-box>
 
-      marker.addEventListener('markerLost', () => {
-        status.innerText = '📷 Marker perdu, rapproche-toi doucement';
-        status.style.borderColor = 'rgba(250, 204, 21, 0.55)';
-        status.style.color = '#fef3c7';
-      });
-    </script>
-  </body>
+      <a-text
+        id="loot-text"
+        value="✦ Trésor ✦"
+        color="#facc15"
+        align="center"
+        position="0 1.5 0"
+        rotation="-90 0 0"
+        width="4"
+        animation="property: opacity; from: 0; to: 1; dur: 600;"
+      ></a-text>
+
+      <a-ring
+        color="#facc15"
+        position="0 0.01 0"
+        rotation="-90 0 0"
+        radius-inner="0.6"
+        radius-outer="0.7"
+        opacity="0.6"
+        animation="property: rotation; to: -90 0 360; loop: true; dur: 3000; easing: linear;"
+      ></a-ring>
+    </a-marker>
+
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+    const marker = document.querySelector('a-marker');
+    const status = document.getElementById('status');
+    const frame  = document.getElementById('frame');
+    const scanline = document.getElementById('scanline');
+
+    let found = false;
+
+    marker.addEventListener('markerFound', function() {
+      if (found) return;
+      found = true;
+
+      status.textContent = '✅ Marqueur trouvé — maintiens stable !';
+      status.classList.add('found');
+      frame.classList.add('found');
+      scanline.classList.add('found');
+
+      window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
+        JSON.stringify({ type: 'MARKER_FOUND' })
+      );
+    });
+
+    marker.addEventListener('markerLost', function() {
+      if (!found) return;
+      found = false;
+
+      status.textContent = '📷 Marqueur perdu, rapproche-toi…';
+      status.classList.remove('found');
+      frame.classList.remove('found');
+      scanline.classList.remove('found');
+
+      window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
+        JSON.stringify({ type: 'MARKER_LOST' })
+      );
+    });
+  </script>
+</body>
 </html>`;
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ArStepScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; huntId?: string }>();
-
   const stepId = Number(params.id ?? 0);
   const huntId = Number(params.huntId ?? 0);
 
-  const { session } = useAuth();
-
-  const [validating, setValidating] = useState(false);
-  const [validated, setValidated] = useState(false);
-  const [webviewError, setWebviewError] = useState<string | null>(null);
-  const [webviewLoaded, setWebviewLoaded] = useState(false);
-
-  // const [renderMode, setRenderMode] = useState<'webview' | 'native'>(
-  //   Platform.OS === 'ios' ? 'native' : 'webview'
-  // );
-
-  const [renderMode, setRenderMode] = useState<'webview' | 'native'>('webview');
-
+  // Permissions
   const [permission, requestPermission] = useCameraPermissions();
+  const [webviewError, setWebviewError] = useState<string | null>(null);
+
+  // Game state
+  const [phase, setPhase] = useState<GamePhase>('searching');
+  const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
+  const [msgIndex, setMsgIndex] = useState(0);
+
+  // Animated values
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim  = useRef(new Animated.Value(0)).current;
+  const countdownScale = useRef(new Animated.Value(1)).current;
+
+  const countdownRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const msgCycleRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Data loading ──────────────────────────────────────────────────────────
 
   const loadStep = useCallback(async () => {
-    if (!huntId || !stepId) {
-      throw new Error("Identifiant d'étape invalide.");
-    }
-
+    if (!huntId || !stepId) throw new Error("Identifiant d'étape invalide.");
     const steps = await lootopiaApi.getHuntSteps(huntId);
-    const found = steps.find((step) => step.id === stepId);
-
-    if (!found) {
-      throw new Error('Étape introuvable pour cette chasse.');
-    }
-
+    const found = steps.find((s) => s.id === stepId);
+    if (!found) throw new Error('Étape introuvable pour cette chasse.');
     return found;
   }, [huntId, stepId]);
 
-  const {
-    data: step,
-    loading: stepLoading,
-    error: stepError,
-  } = useApiResource(loadStep);
+  const { data: step, loading: stepLoading, error: stepError } =
+    useApiResource(loadStep);
 
   const arMarkerUrl = step?.arMarkerUrl ?? null;
-  const htmlSource = useMemo(() => buildArHtml(arMarkerUrl), [arMarkerUrl]);
+  const htmlSource  = useMemo(() => buildArHtml(arMarkerUrl), [arMarkerUrl]);
+
+  // ── Camera permission ─────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!permission || permission.granted) return;
     void requestPermission();
   }, [permission, requestPermission]);
 
+  // ── Message cycling during search ─────────────────────────────────────────
+
   useEffect(() => {
-    if (renderMode !== 'webview' || webviewLoaded) return;
-
-    const timeout = setTimeout(() => {
-      setRenderMode('native');
-      setWebviewError(
-        'Mode WebView indisponible sur cet appareil. Bascule automatique en caméra native.'
-      );
-    }, WEBVIEW_TIMEOUT_MS);
-
-    return () => clearTimeout(timeout);
-  }, [renderMode, webviewLoaded]);
-
-  const handleValidate = async () => {
-    if (!session?.userId) {
-      Alert.alert('Erreur', 'Tu dois être connecté.');
+    if (phase !== 'searching') {
+      if (msgCycleRef.current) clearInterval(msgCycleRef.current);
       return;
     }
+    msgCycleRef.current = setInterval(() => {
+      setMsgIndex((i) => (i + 1) % SEARCH_MESSAGES.length);
+    }, 3500);
+    return () => { if (msgCycleRef.current) clearInterval(msgCycleRef.current); };
+  }, [phase]);
 
-    if (!stepId) {
-      Alert.alert('Erreur', "Étape invalide.");
-      return;
+  // ── Pulse animation when detected ────────────────────────────────────────
+
+  useEffect(() => {
+    if (phase === 'detected' || phase === 'countdown') {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.06, duration: 500, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1,    duration: 500, useNativeDriver: true }),
+        ])
+      ).start();
+      Animated.timing(glowAnim, { toValue: 1, duration: 400, useNativeDriver: false }).start();
+    } else {
+      pulseAnim.setValue(1);
+      glowAnim.setValue(0);
     }
+  }, [phase, pulseAnim, glowAnim]);
 
+  // ── Countdown logic ───────────────────────────────────────────────────────
+
+  const startCountdown = useCallback(() => {
+    setPhase('countdown');
+    setCountdown(COUNTDOWN_SECONDS);
+
+    countdownRef.current = setInterval(() => {
+      setCountdown((c) => {
+        // Bounce scale on each tick
+        Animated.sequence([
+          Animated.timing(countdownScale, { toValue: 1.3, duration: 120, useNativeDriver: true }),
+          Animated.timing(countdownScale, { toValue: 1,   duration: 180, useNativeDriver: true }),
+        ]).start();
+
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+        if (c <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          setPhase('validated');
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+  }, [countdownScale]);
+
+  const cancelCountdown = useCallback(() => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    setCountdown(COUNTDOWN_SECONDS);
+    setPhase('detected');
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (msgCycleRef.current)  clearInterval(msgCycleRef.current);
+    };
+  }, []);
+
+  // ── WebView messages ──────────────────────────────────────────────────────
+
+  const handleWebViewMessage = useCallback((event: { nativeEvent: { data: string } }) => {
     try {
-      setValidating(true);
+      const msg: ArEvent = JSON.parse(event.nativeEvent.data);
 
-      const participation = await lootopiaApi.completeStep(
-        session.userId,
-        stepId,
-        STEP_POINTS_REWARD
-      );
+      if (msg.type === 'MARKER_FOUND') {
+        if (phase === 'searching') {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          setPhase('detected');
+          startCountdown();
+        }
+      }
 
-      setValidated(true);
-
-      Alert.alert(
-        'Étape validée',
-        `Participation #${participation.id} enregistrée (${participation.pointsEarned} points).`,
-        [
-          {
-            text: 'Continuer',
-            onPress: () => router.replace(`/hunt-play/${huntId}`),
-          },
-        ]
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erreur inconnue';
-      Alert.alert('Erreur de validation', message);
-    } finally {
-      setValidating(false);
+      if (msg.type === 'MARKER_LOST') {
+        if (phase === 'detected' || phase === 'countdown') {
+          cancelCountdown();
+          setPhase('searching');
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+      }
+    } catch {
+      // ignore parse errors
     }
-  };
+  }, [phase, startCountdown, cancelCountdown]);
 
-  const openInBrowser = async () => {
+  // ── Open marker in browser ────────────────────────────────────────────────
+
+  const openInBrowser = useCallback(async () => {
     if (!arMarkerUrl) return;
-
     try {
       await WebBrowser.openBrowserAsync(arMarkerUrl, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
       });
     } catch {
-      Alert.alert('Erreur', "Impossible d'ouvrir le marqueur dans le navigateur.");
+      Alert.alert('Erreur', "Impossible d'ouvrir le marqueur.");
     }
-  };
+  }, [arMarkerUrl]);
 
-  const retryWebView = () => {
-    setWebviewLoaded(false);
-    setWebviewError(null);
-    setRenderMode('webview');
-  };
+  // ── Render helpers ────────────────────────────────────────────────────────
+
+  const glowColor = glowAnim.interpolate({
+    inputRange:  [0, 1],
+    outputRange: ['rgba(250,204,21,0)', 'rgba(250,204,21,0.18)'],
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Loading / permission / error states
+  // ─────────────────────────────────────────────────────────────────────────
 
   if (stepLoading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#facc15" />
-        <Text style={styles.loadingText}>Préparation de la scène RA...</Text>
+        <ActivityIndicator color="#facc15" size="large" />
+        <Text style={styles.loadingText}>Préparation du portail…</Text>
       </View>
     );
   }
@@ -271,7 +418,7 @@ export default function ArStepScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator color="#facc15" />
-        <Text style={styles.loadingText}>Vérification permission caméra...</Text>
+        <Text style={styles.loadingText}>Vérification des accès…</Text>
       </View>
     );
   }
@@ -279,14 +426,16 @@ export default function ArStepScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>Permission caméra nécessaire pour la RA.</Text>
-
-        <Pressable style={styles.backButton} onPress={() => void requestPermission()}>
-          <Text style={styles.backButtonText}>Autoriser la caméra</Text>
+        <Text style={styles.permissionIcon}>📷</Text>
+        <Text style={styles.errorTitle}>Accès caméra requis</Text>
+        <Text style={styles.errorSubtitle}>
+          La réalité augmentée a besoin de la caméra pour révéler le trésor.
+        </Text>
+        <Pressable style={styles.primaryButton} onPress={() => void requestPermission()}>
+          <Text style={styles.primaryButtonText}>Autoriser la caméra</Text>
         </Pressable>
-
-        <Pressable style={styles.secondaryBackButton} onPress={() => router.replace(`/hunt-play/${huntId}`)}>
-          <Text style={styles.secondaryBackButtonText}>Retour au jeu</Text>
+        <Pressable style={styles.ghostButton} onPress={() => router.replace(`/hunt-map/${huntId}`)}>
+          <Text style={styles.ghostButtonText}>Retour à la carte</Text>
         </Pressable>
       </View>
     );
@@ -295,118 +444,147 @@ export default function ArStepScreen() {
   if (stepError || !step) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>Erreur : {stepError ?? 'Étape indisponible'}</Text>
-
-        <Pressable style={styles.backButton} onPress={() => router.replace(`/hunt-play/${huntId}`)}>
-          <Text style={styles.backButtonText}>Retour au jeu</Text>
+        <Text style={styles.permissionIcon}>⚠️</Text>
+        <Text style={styles.errorTitle}>Étape introuvable</Text>
+        <Text style={styles.errorSubtitle}>{stepError ?? 'Impossible de charger cette étape.'}</Text>
+        <Pressable style={styles.primaryButton} onPress={() => router.replace(`/hunt-map/${huntId}`)}>
+          <Text style={styles.primaryButtonText}>Retour à la carte</Text>
         </Pressable>
       </View>
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Validated screen
+  // ─────────────────────────────────────────────────────────────────────────
+
+  if (phase === 'validated') {
+    return (
+      <View style={styles.validatedScreen}>
+        <Animated.Text style={[styles.validatedEmoji, { transform: [{ scale: pulseAnim }] }]}>
+          ✦
+        </Animated.Text>
+        <Text style={styles.validatedTitle}>Trésor découvert !</Text>
+        <Text style={styles.validatedSubtitle}>
+          Tu as percé le secret de l'étape {step.orderNumber}.
+        </Text>
+        <Pressable
+          style={styles.primaryButton}
+          onPress={() => router.replace(`/hunt-map/${huntId}`)}
+        >
+          <Text style={styles.primaryButtonText}>Continuer la chasse</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Main AR screen
+  // ─────────────────────────────────────────────────────────────────────────
+
   return (
     <View style={styles.container}>
+      {/* Top bar */}
       <View style={styles.topBar}>
-        <Pressable style={styles.closeButton} onPress={() => router.replace(`/hunt-play/${huntId}`)}>
+        <Pressable
+          style={styles.closeButton}
+          onPress={() => router.replace(`/hunt-map/${huntId}`)}
+        >
           <Text style={styles.closeText}>‹</Text>
         </Pressable>
-
         <View style={styles.headerTextBox}>
-          <Text style={styles.headerTitle}>
-            {renderMode === 'webview' ? 'MODE RA AR.JS' : 'CAMÉRA NATIVE'}
-          </Text>
-          <Text style={styles.headerSubtitle}>Étape {step.orderNumber}</Text>
+          <Text style={styles.headerTitle}>ÉTAPE {step.orderNumber}</Text>
+          <Text style={styles.headerSubtitle}>Mode Réalité Augmentée</Text>
         </View>
       </View>
 
-      {renderMode === 'webview' ? (
-<WebView
-  source={{
-    html: htmlSource,
-    baseUrl: 'https://lootopia-app.lemonmushroom-0ccbe539.polandcentral.azurecontainerapps.io',
-  }}
-  style={styles.webview}
-  originWhitelist={['*']}
-  javaScriptEnabled
-  domStorageEnabled
-  mediaPlaybackRequiresUserAction={false}
-  allowsInlineMediaPlayback
-  mixedContentMode="always"
-  allowFileAccess
-  allowUniversalAccessFromFileURLs
-  androidHardwareAccelerationDisabled={false}
-  mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
-  onLoadEnd={() => setWebviewLoaded(true)}
-  onError={(event) => {
-    setWebviewError(event.nativeEvent.description || 'Erreur inconnue WebView');
-    setRenderMode('native');
-  }}
-  onHttpError={(event) => {
-    setWebviewError(`Erreur HTTP WebView : ${event.nativeEvent.statusCode}`);
-    setRenderMode('native');
-  }}
-/>
-      ) : (
-        <View style={styles.nativeCameraWrap}>
-          <CameraView style={StyleSheet.absoluteFillObject} facing="back" />
+      {/* WebView AR */}
+      <WebView
+        source={{ html: htmlSource }}
+        style={styles.webview}
+        originWhitelist={['*']}
+        javaScriptEnabled
+        domStorageEnabled
+        mediaPlaybackRequiresUserAction={false}
+        allowsInlineMediaPlayback
+        mixedContentMode="always"
+        androidLayerType="hardware"
+        mediaCapturePermissionGrantType="grant"
+        useWebKit
+        allowFileAccess
+        allowUniversalAccessFromFileURLs
+        onPermissionRequest={(event: any) => {
+          // Must pass resources array for Android to actually grant
+          event.nativeEvent.grant(event.nativeEvent.resources);
+        }}
+        onMessage={handleWebViewMessage}
+        onError={(e) => setWebviewError(e.nativeEvent.description || 'Erreur WebView')}
+        onHttpError={(e) => setWebviewError(`HTTP ${e.nativeEvent.statusCode}`)}
+      />
 
-          <View style={styles.nativeCameraOverlay}>
-            <Text style={styles.nativeCameraTitle}>Mode caméra native actif</Text>
-            <Text style={styles.nativeCameraText}>
-              La WebView AR.js peut être instable selon l’appareil. Tu peux continuer la mission ici.
-            </Text>
-          </View>
-        </View>
-      )}
+      {/* Bottom overlay */}
+      <Animated.View style={[styles.bottomPanel, { backgroundColor: glowColor as any }]}>
 
-      <View style={styles.bottomPanel}>
-        {webviewError ? <Text style={styles.webviewError}>WebView : {webviewError}</Text> : null}
+        {/* Searching phase */}
+        {phase === 'searching' && (
+          <Animated.View style={styles.searchBox}>
+            <Text style={styles.searchMessage}>{SEARCH_MESSAGES[msgIndex]}</Text>
+            {arMarkerUrl ? (
+              <Pressable style={styles.ghostButton} onPress={() => void openInBrowser()}>
+                <Text style={styles.ghostButtonText}>Voir le marqueur</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.hintText}>Test avec le marker HIRO</Text>
+            )}
+          </Animated.View>
+        )}
 
-        <View style={styles.modeSwitchRow}>
-          <Pressable
-            style={[styles.modeSwitchButton, renderMode === 'native' && styles.modeSwitchButtonActive]}
-            onPress={() => setRenderMode('native')}
-          >
-            <Text style={styles.modeSwitchText}>Caméra native</Text>
-          </Pressable>
+        {/* Detected phase */}
+        {phase === 'detected' && (
+          <Animated.View style={[styles.detectedBox, { transform: [{ scale: pulseAnim }] }]}>
+            <Text style={styles.detectedLabel}>🔮 Marqueur détecté</Text>
+            <Text style={styles.detectedSub}>Maintiens-le dans le cadre…</Text>
+            <Pressable style={styles.validateButton} onPress={startCountdown}>
+              <Text style={styles.validateButtonText}>Valider maintenant</Text>
+            </Pressable>
+          </Animated.View>
+        )}
 
-          <Pressable
-            style={[styles.modeSwitchButton, renderMode === 'webview' && styles.modeSwitchButtonActive]}
-            onPress={retryWebView}
-          >
-            <Text style={styles.modeSwitchText}>Tester AR.js</Text>
-          </Pressable>
-        </View>
-
-        {arMarkerUrl ? (
-          <Pressable style={styles.secondaryButton} onPress={() => void openInBrowser()}>
-            <Text style={styles.secondaryButtonText}>Ouvrir le marqueur</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.fallbackHintBox}>
-            <Text style={styles.fallbackHintText}>
-              Aucun arMarkerUrl fourni par l’API : test avec le marker HIRO.
-            </Text>
+        {/* Countdown phase */}
+        {phase === 'countdown' && (
+          <View style={styles.countdownBox}>
+            <View style={styles.countdownRow}>
+              <Text style={styles.countdownLabel}>Validation dans</Text>
+              <Animated.Text
+                style={[styles.countdownNumber, { transform: [{ scale: countdownScale }] }]}
+              >
+                {countdown}
+              </Animated.Text>
+            </View>
+            <View style={styles.countdownBar}>
+              <View
+                style={[
+                  styles.countdownFill,
+                  { width: `${((COUNTDOWN_SECONDS - countdown) / COUNTDOWN_SECONDS) * 100}%` },
+                ]}
+              />
+            </View>
+            <Pressable style={styles.cancelButton} onPress={cancelCountdown}>
+              <Text style={styles.cancelButtonText}>✕ Annuler</Text>
+            </Pressable>
           </View>
         )}
 
-        <Pressable
-          style={[styles.validateButton, (validating || validated) && styles.buttonDisabled]}
-          onPress={() => void handleValidate()}
-          disabled={validating || validated}
-        >
-          {validating ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.validateButtonText}>
-              {validated ? 'Étape déjà validée' : "J’ai trouvé le marqueur, valider"}
-            </Text>
-          )}
-        </Pressable>
-      </View>
+        {/* WebView error */}
+        {webviewError ? (
+          <Text style={styles.webviewError}>⚠ {webviewError}</Text>
+        ) : null}
+      </Animated.View>
     </View>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -418,40 +596,91 @@ const styles = StyleSheet.create({
     backgroundColor: '#020617',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    gap: 12,
+    padding: 28,
+    gap: 14,
+  },
+
+  // Loading / error
+  permissionIcon: {
+    fontSize: 52,
+    marginBottom: 4,
   },
   loadingText: {
     color: '#fef3c7',
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 12,
+  },
+  errorTitle: {
+    color: '#fef3c7',
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  errorSubtitle: {
+    color: '#94a3b8',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 6,
+  },
+
+  // Buttons
+  primaryButton: {
+    borderRadius: 14,
+    backgroundColor: '#0f766e',
+    paddingHorizontal: 24,
+    paddingVertical: 13,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: '#ecfeff',
+    fontSize: 15,
     fontWeight: '800',
   },
-  errorText: {
-    color: '#fecaca',
-    textAlign: 'center',
-    fontWeight: '700',
-  },
-  backButton: {
-    marginTop: 10,
-    borderRadius: 12,
-    backgroundColor: '#0f766e',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  backButtonText: {
-    color: '#ecfeff',
-    fontWeight: '700',
-  },
-  secondaryBackButton: {
+  ghostButton: {
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#475569',
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingVertical: 10,
+    alignItems: 'center',
   },
-  secondaryBackButtonText: {
+  ghostButtonText: {
     color: '#cbd5e1',
+    fontSize: 13,
     fontWeight: '700',
   },
+  validateButton: {
+    marginTop: 10,
+    borderRadius: 14,
+    backgroundColor: '#0f766e',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  validateButtonText: {
+    color: '#ecfeff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  cancelButton: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    alignItems: 'center',
+    alignSelf: 'center',
+  },
+  cancelButtonText: {
+    color: '#fca5a5',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // Top bar
   topBar: {
     paddingTop: 54,
     paddingHorizontal: 14,
@@ -466,140 +695,162 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 14,
     backgroundColor: 'rgba(31,22,12,0.78)',
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: '#d97706',
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeText: {
     color: '#fef3c7',
-    fontSize: 42,
+    fontSize: 38,
     fontWeight: '900',
     lineHeight: 42,
   },
   headerTextBox: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: 'rgba(2,44,34,0.72)',
     borderWidth: 1,
-    borderColor: 'rgba(250,204,21,0.35)',
+    borderColor: 'rgba(250,204,21,0.3)',
     padding: 10,
   },
   headerTitle: {
     color: '#facc15',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '900',
+    letterSpacing: 1.2,
   },
   headerSubtitle: {
-    marginTop: 2,
-    color: '#e2e8f0',
-    fontSize: 12,
+    color: '#94a3b8',
+    fontSize: 11,
     fontWeight: '700',
+    marginTop: 2,
   },
+
+  // WebView
   webview: {
     flex: 1,
     backgroundColor: '#000',
   },
-  nativeCameraWrap: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  nativeCameraOverlay: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 12,
-    borderRadius: 10,
-    backgroundColor: 'rgba(2, 6, 23, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(34, 197, 94, 0.45)',
-    padding: 10,
-    gap: 4,
-  },
-  nativeCameraTitle: {
-    color: '#86efac',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  nativeCameraText: {
-    color: '#e2e8f0',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  fallbackHintBox: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#f59e0b',
-    backgroundColor: 'rgba(120,53,15,0.35)',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-  },
-  fallbackHintText: {
-    color: '#fef3c7',
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+
+  // Bottom panel
   bottomPanel: {
     paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 22,
-    gap: 10,
+    paddingTop: 12,
+    paddingBottom: 28,
     backgroundColor: '#020617',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: 'rgba(255,255,255,0.07)',
+    minHeight: 110,
+    justifyContent: 'center',
   },
-  webviewError: {
-    color: '#fca5a5',
+
+  // Searching
+  searchBox: {
+    gap: 10,
+    alignItems: 'center',
+  },
+  searchMessage: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 22,
+    fontStyle: 'italic',
+  },
+  hintText: {
+    color: '#f59e0b',
     fontSize: 12,
     fontWeight: '600',
+    textAlign: 'center',
   },
-  secondaryButton: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#38bdf8',
-    backgroundColor: 'rgba(14,116,144,0.35)',
-    paddingVertical: 10,
+
+  // Detected
+  detectedBox: {
     alignItems: 'center',
+    gap: 4,
   },
-  secondaryButtonText: {
-    color: '#bae6fd',
-    fontWeight: '700',
-  },
-  modeSwitchRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  modeSwitchButton: {
-    flex: 1,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#475569',
-    backgroundColor: '#1e293b',
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  modeSwitchButtonActive: {
-    borderColor: '#22d3ee',
-    backgroundColor: '#164e63',
-  },
-  modeSwitchText: {
-    color: '#e2e8f0',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  validateButton: {
-    borderRadius: 12,
-    backgroundColor: '#16a34a',
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  validateButtonText: {
-    color: '#fff',
+  detectedLabel: {
+    color: '#bbf7d0',
+    fontSize: 18,
     fontWeight: '900',
-    fontSize: 15,
+    textAlign: 'center',
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  detectedSub: {
+    color: '#6ee7b7',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  // Countdown
+  countdownBox: {
+    gap: 10,
+  },
+  countdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+  },
+  countdownLabel: {
+    color: '#fef3c7',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  countdownNumber: {
+    color: '#facc15',
+    fontSize: 38,
+    fontWeight: '900',
+    minWidth: 50,
+    textAlign: 'center',
+  },
+  countdownBar: {
+    height: 5,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  countdownFill: {
+    height: '100%',
+    backgroundColor: '#22c55e',
+    borderRadius: 3,
+  },
+
+  // Validated
+  validatedScreen: {
+    flex: 1,
+    backgroundColor: '#020617',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 16,
+  },
+  validatedEmoji: {
+    fontSize: 72,
+    color: '#facc15',
+    marginBottom: 8,
+  },
+  validatedTitle: {
+    color: '#fef3c7',
+    fontSize: 28,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  validatedSubtitle: {
+    color: '#94a3b8',
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+
+  // Errors
+  webviewError: {
+    color: '#fca5a5',
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 6,
   },
 });

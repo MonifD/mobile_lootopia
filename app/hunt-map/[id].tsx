@@ -11,7 +11,7 @@ import {
   StyleSheet,
   View
 } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/app-footer';
@@ -22,11 +22,9 @@ import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
 import type { Step } from '@/types/game';
 
-const PROXIMITY_RADIUS = 5;
+const PROXIMITY_RADIUS = 2000;
 const MAP_FOLLOW_INTERVAL_MS = 1500;
-const TRAIL_MIN_POINT_DISTANCE_METERS = 2;
 const FOOTER_CLEARANCE = 86;
-const STEP_POINTS_REWARD = 10;
 
 const PROXIMITY_SIGNAL_LEVELS = [
   { maxDistance: 120, label: 'Signal faible', style: Haptics.ImpactFeedbackStyle.Light },
@@ -131,9 +129,8 @@ export default function HuntMapScreen() {
 
   const [selectedStep, setSelectedStep] = useState<Step | null>(null);
   const [localDoneStepIds, setLocalDoneStepIds] = useState<Set<number>>(new Set());
-  const [validatingStepId, setValidatingStepId] = useState<number | null>(null);
   const [autoFollowEnabled, setAutoFollowEnabled] = useState(true);
-  const [walkedPath, setWalkedPath] = useState<Array<{ latitude: number; longitude: number }>>([]);
+  const [isMapReady, setIsMapReady] = useState(false);
 
   const { location, error: locationError, permissionDenied, isLoading: locationLoading } =
     usePlayerLocation();
@@ -149,22 +146,38 @@ export default function HuntMapScreen() {
   const { data: participations, refresh: refreshParticipations } =
     useApiResource(loadParticipations);
 
-  const doneStepIds = useMemo<Set<number>>(() => {
-    const set = new Set<number>(localDoneStepIds);
+const doneStepIds = useMemo<Set<number>>(() => {
+  const set = new Set<number>();
 
-    if (!participations) return set;
-
-    for (const participation of participations) {
-      if (typeof participation.step !== 'string') continue;
-
-      const stepId = extractIdFromIri(participation.step);
-      if (stepId !== null) {
-        set.add(stepId);
-      }
-    }
-
+  if (!steps?.length) {
     return set;
-  }, [participations, localDoneStepIds]);
+  }
+
+  const stepIdsInCurrentHunt = new Set(steps.map((step) => step.id));
+
+  for (const stepId of localDoneStepIds) {
+    if (stepIdsInCurrentHunt.has(stepId)) {
+      set.add(stepId);
+    }
+  }
+
+  if (!participations?.length) {
+    return set;
+  }
+
+  for (const participation of participations) {
+    if (typeof participation.step !== 'string') continue;
+
+    const stepId = extractIdFromIri(participation.step);
+
+    if (stepId !== null && stepIdsInCurrentHunt.has(stepId)) {
+      set.add(stepId);
+    }
+  }
+
+  return set;
+}, [participations, localDoneStepIds, steps]);
+
 
   const nearStepIds = useMemo<Set<number>>(() => {
     const set = new Set<number>();
@@ -219,6 +232,21 @@ export default function HuntMapScreen() {
   const currentSignalLabel =
     currentSignalLevel > 0 ? PROXIMITY_SIGNAL_LEVELS[currentSignalLevel - 1].label : null;
 
+  const routeLine = useMemo(() => {
+    if (!location || !currentStep) return [];
+
+    return [
+      {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      },
+      {
+        latitude: currentStep.latitude,
+        longitude: currentStep.longitude,
+      },
+    ];
+  }, [location, currentStep]);
+
   const visibleSteps = useMemo(() => {
     if (!steps?.length) return [] as Step[];
     return steps.filter((step) => doneStepIds.has(step.id) || step.id === currentStep?.id);
@@ -257,9 +285,9 @@ export default function HuntMapScreen() {
   const isLoading = stepsLoading || locationLoading;
 
   useEffect(() => {
-    if (!steps?.length || !mapRef.current) return;
+    if (!isMapReady || !steps?.length) return;
 
-    mapRef.current.animateToRegion(
+    mapRef.current?.animateToRegion(
       {
         latitude: steps[0].latitude,
         longitude: steps[0].longitude,
@@ -268,17 +296,17 @@ export default function HuntMapScreen() {
       },
       800
     );
-  }, [steps]);
+  }, [steps, isMapReady]);
 
   useEffect(() => {
-    if (!location || !mapRef.current || !autoFollowEnabled) return;
+    if (!isMapReady || !location || !autoFollowEnabled) return;
 
     const now = Date.now();
     if (now - lastFollowAnimationMsRef.current < MAP_FOLLOW_INTERVAL_MS) return;
 
     lastFollowAnimationMsRef.current = now;
 
-    mapRef.current.animateToRegion(
+    mapRef.current?.animateToRegion(
       {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
@@ -287,7 +315,7 @@ export default function HuntMapScreen() {
       },
       700
     );
-  }, [location, autoFollowEnabled]);
+  }, [location, autoFollowEnabled, isMapReady]);
 
   useEffect(() => {
     if (doneStepIds.has(currentStep?.id ?? -1)) return;
@@ -314,32 +342,6 @@ export default function HuntMapScreen() {
     setSelectedStep(null);
   }, [selectedStep, visibleSteps]);
 
-  useEffect(() => {
-    if (!location) return;
-
-    const point = {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-    };
-
-    setWalkedPath((previous) => {
-      if (previous.length === 0) return [point];
-
-      const last = previous[previous.length - 1];
-      const distance = haversineDistance(last.latitude, last.longitude, point.latitude, point.longitude);
-
-      if (distance < TRAIL_MIN_POINT_DISTANCE_METERS) {
-        return previous;
-      }
-
-      return [...previous, point];
-    });
-  }, [location]);
-
-  useEffect(() => {
-    setWalkedPath([]);
-  }, [huntId]);
-
   const openArMarker = async (url: string) => {
     try {
       await WebBrowser.openBrowserAsync(url, {
@@ -350,43 +352,7 @@ export default function HuntMapScreen() {
     }
   };
 
-  const validateSelectedStep = async () => {
-    if (!selectedStep) return;
 
-    if (!session?.userId) {
-      Alert.alert('Connexion requise', 'Tu dois être connecté pour valider une étape.');
-      return;
-    }
-
-    if (!forceArTestMode && !nearStepIds.has(selectedStep.id)) {
-      Alert.alert('Trop loin', `Approche-toi à moins de ${PROXIMITY_RADIUS} m de l’étape.`);
-      return;
-    }
-
-    if (doneStepIds.has(selectedStep.id)) {
-      return;
-    }
-
-    try {
-      setValidatingStepId(selectedStep.id);
-
-      await lootopiaApi.completeStep(session.userId, selectedStep.id, STEP_POINTS_REWARD);
-
-      setLocalDoneStepIds((previous) => {
-        const next = new Set(previous);
-        next.add(selectedStep.id);
-        return next;
-      });
-
-      await refreshParticipations();
-      Alert.alert('Étape validée', 'Bravo, cette étape est terminée !');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erreur inconnue';
-      Alert.alert('Erreur', message);
-    } finally {
-      setValidatingStepId(null);
-    }
-  };
 
   return (
     <View style={styles.container}>
@@ -456,6 +422,7 @@ export default function HuntMapScreen() {
           style={styles.map}
           provider={PROVIDER_DEFAULT}
           initialRegion={initialRegion}
+          onMapReady={() => setIsMapReady(true)}
           showsUserLocation={false}
           showsMyLocationButton={false}
           onPanDrag={() => {
@@ -464,20 +431,14 @@ export default function HuntMapScreen() {
         >
           {location ? (
             <>
-              {walkedPath.map((point, index) => (
-                <Marker
-                  key={`footstep-${index}`}
-                  coordinate={point}
-                  anchor={{ x: 0.5, y: 0.5 }}
-                  zIndex={3}
-                  tracksViewChanges={false}
-                >
-                  <Image
-                    source={require('@/assets/images/trace_pied.png')}
-                    style={markerStyles.trailFootstepImage}
-                  />
-                </Marker>
-              ))}
+              {routeLine.length === 2 ? (
+                <Polyline
+                  coordinates={routeLine}
+                  strokeColor="#0f766e"
+                  strokeWidth={4}
+                  lineCap="round"
+                />
+              ) : null}
 
               <Marker
                 coordinate={{
@@ -530,15 +491,12 @@ export default function HuntMapScreen() {
             <ThemedText style={styles.legendText}>Étape à portée</ThemedText>
           </View>
 
-          <View style={styles.legendItem}>
-            <View style={[styles.legendLine, { backgroundColor: '#d97706' }]} />
-            <ThemedText style={styles.legendText}>Trace de marche</ThemedText>
-          </View>
-
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#16a34a' }]} />
-            <ThemedText style={styles.legendText}>Étape validée ✓</ThemedText>
-          </View>
+{doneStepIds.size > 0 ? (
+  <View style={styles.legendItem}>
+    <View style={[styles.legendDot, { backgroundColor: '#16a34a' }]} />
+    <ThemedText style={styles.legendText}>Étape validée ✓</ThemedText>
+  </View>
+) : null}
 
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
@@ -647,19 +605,6 @@ export default function HuntMapScreen() {
                 </Pressable>
               ) : null}
 
-              {!doneStepIds.has(selectedStep.id) ? (
-                <Pressable
-                  style={styles.validateBtn}
-                  onPress={() => void validateSelectedStep()}
-                  disabled={validatingStepId === selectedStep.id}
-                >
-                  {validatingStepId === selectedStep.id ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <ThemedText style={styles.validateBtnText}>✅ Valider l’étape</ThemedText>
-                  )}
-                </Pressable>
-              ) : null}
             </View>
           ) : doneStepIds.has(selectedStep.id) ? (
             <View style={styles.doneBox}>
@@ -724,13 +669,6 @@ const markerStyles = StyleSheet.create({
     height:39,
     resizeMode: 'contain',
   },
-
-  trailFootstepImage: {
-  width: 24,
-  height: 24,
-  resizeMode: 'contain',
-  opacity: 0.7,
-},
 });
 
 const pinStyles = StyleSheet.create({
@@ -995,12 +933,6 @@ recenterIcon: {
     width: 12,
     height: 12,
     borderRadius: 6,
-  },
-
-  legendLine: {
-    width: 16,
-    height: 4,
-    borderRadius: 3,
   },
 
   legendText: {
