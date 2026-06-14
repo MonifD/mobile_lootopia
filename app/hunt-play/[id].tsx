@@ -197,7 +197,7 @@ function StepProgressBar({
 }
 
 export default function HuntPlayScreen() {
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; finished?: string }>();
   const huntId = Number(params.id ?? 0);
   const router = useRouter();
   const { session } = useAuth();
@@ -207,7 +207,7 @@ export default function HuntPlayScreen() {
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
-  const [huntFinished, setHuntFinished] = useState(false);
+  const [huntFinished, setHuntFinished] = useState(params.finished === '1');
 
   const watchRef = useRef<Location.LocationSubscription | null>(null);
 
@@ -248,6 +248,7 @@ export default function HuntPlayScreen() {
         done.add(stepId);
       }
     }
+    console.log('completedStepIds:', [...done]);
 
     return done;
   }, [data?.participations, steps]);
