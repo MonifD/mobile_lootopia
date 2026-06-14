@@ -100,6 +100,7 @@ export type Participation = {
   user: string;
   pointsEarned: number;
   completedAt: string | null;
+  isLastStep: boolean;
 };
 
 export type HuntHistoryHunt = {

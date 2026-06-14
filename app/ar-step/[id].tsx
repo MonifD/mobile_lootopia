@@ -15,6 +15,8 @@ import {
 import { WebView } from 'react-native-webview';
 
 import { useApiResource } from '@/hooks/use-api-resource';
+import { addGems } from '@/hooks/use-gems';
+import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -57,18 +59,6 @@ function buildArHtml(markerPatternUrl?: string | null): string {
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-
-  <script>
-    // Pre-request camera BEFORE AR.js loads — unblocks WebView permission on Android
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices
-        .getUserMedia({ video: { facingMode: 'environment' }, audio: false })
-        .then(function(stream) {
-          stream.getTracks().forEach(function(t) { t.stop(); });
-        })
-        .catch(function(e) { console.warn('Pre-camera request:', e); });
-    }
-  </script>
 
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
@@ -240,6 +230,7 @@ function buildArHtml(markerPatternUrl?: string | null): string {
 
 export default function ArStepScreen() {
   const router = useRouter();
+  const { session } = useAuth();
   const params = useLocalSearchParams<{ id?: string; huntId?: string }>();
   const stepId = Number(params.id ?? 0);
   const huntId = Number(params.huntId ?? 0);
@@ -247,6 +238,7 @@ export default function ArStepScreen() {
   // Permissions
   const [permission, requestPermission] = useCameraPermissions();
   const [webviewError, setWebviewError] = useState<string | null>(null);
+  const [validating, setValidating] = useState(false);
 
   // Game state
   const [phase, setPhase] = useState<GamePhase>('searching');
@@ -316,13 +308,34 @@ export default function ArStepScreen() {
 
   // ── Countdown logic ───────────────────────────────────────────────────────
 
+  const validateStep = useCallback(async () => {
+    if (!session?.userId || !stepId) return;
+    setValidating(true);
+    try {
+      const participation = await lootopiaApi.completeStep(session.userId, stepId, 10);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (participation.isLastStep) {
+        await addGems(session.userId, 10);
+        Alert.alert('🏆 Chasse terminée !', '💎 +10 gemmes gagnées !', [
+          { text: 'Super !', onPress: () => router.replace(`/hunt-map/${huntId}`) },
+        ]);
+      } else {
+        setPhase('validated');
+      }
+    } catch {
+      Alert.alert('Erreur', "Impossible de valider l'étape. Réessaie.");
+      setPhase('searching');
+    } finally {
+      setValidating(false);
+    }
+  }, [session?.userId, stepId, huntId, router]);
+
   const startCountdown = useCallback(() => {
     setPhase('countdown');
     setCountdown(COUNTDOWN_SECONDS);
 
     countdownRef.current = setInterval(() => {
       setCountdown((c) => {
-        // Bounce scale on each tick
         Animated.sequence([
           Animated.timing(countdownScale, { toValue: 1.3, duration: 120, useNativeDriver: true }),
           Animated.timing(countdownScale, { toValue: 1,   duration: 180, useNativeDriver: true }),
@@ -332,14 +345,14 @@ export default function ArStepScreen() {
 
         if (c <= 1) {
           if (countdownRef.current) clearInterval(countdownRef.current);
-          setPhase('validated');
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          void validateStep();
           return 0;
         }
         return c - 1;
       });
     }, 1000);
-  }, [countdownScale]);
+  }, [countdownScale, validateStep]);
 
   const cancelCountdown = useCallback(() => {
     if (countdownRef.current) clearInterval(countdownRef.current);
@@ -458,22 +471,31 @@ export default function ArStepScreen() {
   // Validated screen
   // ─────────────────────────────────────────────────────────────────────────
 
-  if (phase === 'validated') {
+  if (phase === 'validated' || validating) {
     return (
       <View style={styles.validatedScreen}>
-        <Animated.Text style={[styles.validatedEmoji, { transform: [{ scale: pulseAnim }] }]}>
-          ✦
-        </Animated.Text>
-        <Text style={styles.validatedTitle}>Trésor découvert !</Text>
-        <Text style={styles.validatedSubtitle}>
-          Tu as percé le secret de l'étape {step.orderNumber}.
-        </Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => router.replace(`/hunt-map/${huntId}`)}
-        >
-          <Text style={styles.primaryButtonText}>Continuer la chasse</Text>
-        </Pressable>
+        {validating ? (
+          <>
+            <ActivityIndicator color="#facc15" size="large" />
+            <Text style={styles.loadingText}>Validation en cours…</Text>
+          </>
+        ) : (
+          <>
+            <Animated.Text style={[styles.validatedEmoji, { transform: [{ scale: pulseAnim }] }]}>
+              ✦
+            </Animated.Text>
+            <Text style={styles.validatedTitle}>Trésor découvert !</Text>
+            <Text style={styles.validatedSubtitle}>
+              Tu as percé le secret de l'étape {step.orderNumber}.
+            </Text>
+            <Pressable
+              style={styles.primaryButton}
+              onPress={() => router.replace(`/hunt-map/${huntId}`)}
+            >
+              <Text style={styles.primaryButtonText}>Continuer la chasse</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     );
   }
@@ -508,13 +530,12 @@ export default function ArStepScreen() {
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback
         mixedContentMode="always"
-        androidLayerType="hardware"
+        androidLayerType="software"
         mediaCapturePermissionGrantType="grant"
-        useWebKit
         allowFileAccess
         allowUniversalAccessFromFileURLs
+        setSupportMultipleWindows={false}
         onPermissionRequest={(event: any) => {
-          // Must pass resources array for Android to actually grant
           event.nativeEvent.grant(event.nativeEvent.resources);
         }}
         onMessage={handleWebViewMessage}
