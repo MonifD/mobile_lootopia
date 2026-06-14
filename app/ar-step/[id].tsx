@@ -334,21 +334,10 @@ export default function ArStepScreen() {
 
       if (participation.isLastStep) {
         await addGems(session.userId, 10);
+        router.replace(`/hunt-play/${huntId}`);
+      } else {
+        setValidated(true);
       }
-
-      setValidated(true);
-
-      const huntCompleteMsg = participation.isLastStep ? '\n\n💎 +10 gemmes gagnées !' : '';
-      Alert.alert(
-        'Étape validée',
-        `Participation #${participation.id} enregistrée (${participation.pointsEarned} points).${huntCompleteMsg}`,
-        [
-          {
-            text: 'Continuer',
-            onPress: () => router.replace(`/hunt-play/${huntId}`),
-          },
-        ]
-      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erreur inconnue';
       Alert.alert('Erreur de validation', message);

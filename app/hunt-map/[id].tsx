@@ -388,10 +388,12 @@ const doneStepIds = useMemo<Set<number>>(() => {
       });
 
       await refreshParticipations();
-      const huntCompleteMsg = participation.isLastStep
-        ? 'Bravo, cette étape est terminée !\n\n💎 Chasse terminée ! +10 gemmes gagnées !'
-        : 'Bravo, cette étape est terminée !';
-      Alert.alert('Étape validée', huntCompleteMsg);
+
+      if (participation.isLastStep) {
+        router.replace(`/hunt-play/${huntId}`);
+      } else {
+        Alert.alert('Étape validée', 'Bravo, cette étape est terminée !');
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erreur inconnue';
       Alert.alert('Erreur', message);

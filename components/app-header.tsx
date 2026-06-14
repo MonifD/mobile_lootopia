@@ -1,12 +1,14 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { LevelModal } from '@/components/level-modal';
+import { useApiResource } from '@/hooks/use-api-resource';
+import { useGems } from '@/hooks/use-gems';
+import { useAuth } from '@/providers/auth-provider';
+import { lootopiaApi } from '@/services/lootopia-api';
 import { computeLevel } from '@/utils/level';
-
-type Props = { gems?: number; totalPoints?: number };
 
 const TIER_ICONS: Record<string, string> = {
   BRONZE: '🥉',
@@ -18,16 +20,29 @@ const TIER_ICONS: Record<string, string> = {
 
 function CurrencyPill({ icon, value }: { icon: string; value: string }) {
   return (
-    <LinearGradient colors={["#2b1b0a", "#0f0a05"]} style={styles.currencyPill}>
+    <LinearGradient colors={['#2b1b0a', '#0f0a05']} style={styles.currencyPill}>
       <Text style={styles.currencyIcon}>{icon}</Text>
       <Text style={styles.currencyValue}>{value}</Text>
     </LinearGradient>
   );
 }
 
-export function AppHeader({ gems = 0, totalPoints = 0 }: Props) {
+export function AppHeader() {
   const router = useRouter();
+  const { session } = useAuth();
+  const { gems } = useGems(session?.userId);
   const [showModal, setShowModal] = useState(false);
+
+  const loadProfile = useCallback(
+    () =>
+      session?.userId
+        ? lootopiaApi.getUser(session.userId).catch(() => null)
+        : Promise.resolve(null),
+    [session?.userId],
+  );
+  const { data: profile } = useApiResource(loadProfile);
+
+  const totalPoints = profile?.totalPoints ?? 0;
   const { numericLevel, progress, tier } = computeLevel(totalPoints);
   const progressPct = Math.round(progress * 100);
 
@@ -102,8 +117,15 @@ const styles = StyleSheet.create({
     borderColor: '#a16207',
     overflow: 'hidden',
   },
-  progressInner: { width: '65%', height: '100%', backgroundColor: '#facc15' },
-  progressText: { position: 'absolute', right: 5, top: -1, color: '#fff', fontSize: 9, fontWeight: '900' },
+  progressInner: { height: '100%', backgroundColor: '#facc15' },
+  progressText: {
+    position: 'absolute',
+    right: 5,
+    top: -1,
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '900',
+  },
   currencyGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   currencyPill: {
     height: 38,
@@ -118,6 +140,4 @@ const styles = StyleSheet.create({
   },
   currencyIcon: { fontSize: 18 },
   currencyValue: { color: '#fff7ed', fontSize: 13, fontWeight: '900' },
-  plusButton: { marginLeft: 'auto', width: 22, height: 22, borderRadius: 999, backgroundColor: '#84cc16', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#fef3c7' },
-  plusText: { color: '#fff', fontSize: 16, fontWeight: '900', lineHeight: 18 },
 });

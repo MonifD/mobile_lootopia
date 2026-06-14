@@ -251,7 +251,7 @@ export default function HuntsScreen() {
   return (
     <GameBackground>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <AppHeader gems={gems} totalPoints={totalPoints} />
+        <AppHeader />
 
         <GoldFrame>
           <View style={styles.summaryTop}>
