@@ -749,6 +749,11 @@ export const lootopiaApi = {
       });
     }),
 
+  getAllSteps: (): Promise<Step[]> =>
+    request<unknown>('/steps?itemsPerPage=500').then((payload) =>
+      unwrapCollection<unknown>(payload).map((s, i) => normalizeStep(s, i))
+    ),
+
   getMyRank: () => request<UserRank>('/leaderboard/my-rank'),
 
   /**
