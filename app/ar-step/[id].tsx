@@ -336,7 +336,7 @@ export default function ArStepScreen() {
         await addGems(session.userId, 10);
         router.replace(`/hunt-play/${huntId}`);
       } else {
-        setValidated(true);
+        setPhase('validated');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erreur inconnue';
@@ -501,9 +501,9 @@ export default function ArStepScreen() {
             </Text>
             <Pressable
               style={styles.primaryButton}
-              onPress={() => router.replace(`/hunt-map/${huntId}`)}
+              onPress={() => router.replace(`/hunt-play/${huntId}`)}
             >
-              <Text style={styles.primaryButtonText}>Continuer la chasse</Text>
+              <Text style={styles.primaryButtonText}>Étape suivante →</Text>
             </Pressable>
           </>
         )}
