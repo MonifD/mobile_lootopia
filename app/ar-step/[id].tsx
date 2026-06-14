@@ -522,7 +522,11 @@ export default function ArStepScreen() {
 
       {/* WebView AR */}
       <WebView
-        source={{ html: htmlSource }}
+        // source={{ html: htmlSource }}
+        source={{
+  html: htmlSource,
+  baseUrl: 'https://lootopia-app.lemonmushroom-0ccbe539.polandcentral.azurecontainerapps.io',
+}}
         style={styles.webview}
         originWhitelist={['*']}
         javaScriptEnabled
@@ -531,7 +535,7 @@ export default function ArStepScreen() {
         allowsInlineMediaPlayback
         mixedContentMode="always"
         androidLayerType="software"
-        mediaCapturePermissionGrantType="grant"
+        mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
         allowFileAccess
         allowUniversalAccessFromFileURLs
         setSupportMultipleWindows={false}
