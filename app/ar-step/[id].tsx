@@ -30,6 +30,7 @@ type GamePhase = 'searching' | 'detected' | 'countdown' | 'validated';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const COUNTDOWN_SECONDS = 3;
+const STEP_POINTS_REWARD = 10;
 const BASE_URL = 'https://lootopia-app.lemonmushroom-0ccbe539.polandcentral.azurecontainerapps.io';
 
 const SEARCH_MESSAGES = [
@@ -252,6 +253,7 @@ export default function ArStepScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [webviewError, setWebviewError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
+  const [validated, setValidated] = useState(false);
 
   const [phase, setPhase] = useState<GamePhase>('searching');
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);

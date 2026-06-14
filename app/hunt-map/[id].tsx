@@ -24,6 +24,7 @@ import { lootopiaApi } from '@/services/lootopia-api';
 import type { Step } from '@/types/game';
 
 const PROXIMITY_RADIUS = 5;
+const STEP_POINTS_REWARD = 10;
 const MAP_FOLLOW_INTERVAL_MS = 1500;
 const FOOTER_CLEARANCE = 86;
 
@@ -130,6 +131,7 @@ export default function HuntMapScreen() {
 
   const [selectedStep, setSelectedStep] = useState<Step | null>(null);
   const [localDoneStepIds, setLocalDoneStepIds] = useState<Set<number>>(new Set());
+  const [validatingStepId, setValidatingStepId] = useState<number | null>(null);
   const [autoFollowEnabled, setAutoFollowEnabled] = useState(true);
   const [isMapReady, setIsMapReady] = useState(false);
 
@@ -353,6 +355,8 @@ const doneStepIds = useMemo<Set<number>>(() => {
     }
   };
 
+  const validateStep = async () => {
+    if (!selectedStep) return;
 
     if (!session?.userId) {
       Alert.alert('Connexion requise', 'Tu dois être connecté pour valider une étape.');
