@@ -375,11 +375,7 @@ const doneStepIds = useMemo<Set<number>>(() => {
     try {
       setValidatingStepId(selectedStep.id);
 
-      const participation = await lootopiaApi.completeStep(session.userId, selectedStep.id, STEP_POINTS_REWARD);
-
-      if (participation.isLastStep) {
-        await addGems(session.userId, 10);
-      }
+      await lootopiaApi.completeStep(session.userId, selectedStep.id, STEP_POINTS_REWARD);
 
       setLocalDoneStepIds((previous) => {
         const next = new Set(previous);
@@ -387,9 +383,22 @@ const doneStepIds = useMemo<Set<number>>(() => {
         return next;
       });
 
-      await refreshParticipations();
+      // Vérification fiable : compter les étapes complétées vs total
+      const [allParticipations] = await Promise.all([
+        lootopiaApi.getMyParticipations(session.userId),
+        refreshParticipations(),
+      ]);
 
-      if (participation.isLastStep) {
+      const stepIdsInHunt = new Set((steps ?? []).map((s) => s.id));
+      const completedCount = allParticipations.filter((p) => {
+        const match = p.step.match(/\/(\d+)$/);
+        return match && stepIdsInHunt.has(Number(match[1]));
+      }).length;
+
+      const isHuntComplete = completedCount >= (steps ?? []).length;
+
+      if (isHuntComplete) {
+        await addGems(session.userId, 10);
         router.replace(`/hunt-play/${huntId}?finished=1`);
       } else {
         Alert.alert('Étape validée', 'Bravo, cette étape est terminée !');

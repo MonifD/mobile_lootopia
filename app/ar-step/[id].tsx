@@ -324,15 +324,23 @@ export default function ArStepScreen() {
     if (!session?.userId || !stepId) return;
     setValidating(true);
     try {
-      setValidating(true);
+      await lootopiaApi.completeStep(session.userId, stepId, STEP_POINTS_REWARD);
 
-      const participation = await lootopiaApi.completeStep(
-        session.userId,
-        stepId,
-        STEP_POINTS_REWARD
-      );
+      // Vérification fiable : compter les étapes complétées vs total
+      const [allSteps, allParticipations] = await Promise.all([
+        lootopiaApi.getHuntSteps(huntId),
+        lootopiaApi.getMyParticipations(session.userId),
+      ]);
 
-      if (participation.isLastStep) {
+      const stepIdsInHunt = new Set(allSteps.map((s) => s.id));
+      const completedCount = allParticipations.filter((p) => {
+        const match = p.step.match(/\/(\d+)$/);
+        return match && stepIdsInHunt.has(Number(match[1]));
+      }).length;
+
+      const isHuntComplete = completedCount >= allSteps.length;
+
+      if (isHuntComplete) {
         await addGems(session.userId, 10);
         router.replace(`/hunt-play/${huntId}?finished=1`);
       } else {
