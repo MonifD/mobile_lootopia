@@ -334,7 +334,7 @@ export default function ArStepScreen() {
 
       if (participation.isLastStep) {
         await addGems(session.userId, 10);
-        router.replace(`/hunt-play/${huntId}`);
+        router.replace(`/hunt-play/${huntId}?finished=1`);
       } else {
         setPhase('validated');
       }

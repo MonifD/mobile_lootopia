@@ -390,7 +390,7 @@ const doneStepIds = useMemo<Set<number>>(() => {
       await refreshParticipations();
 
       if (participation.isLastStep) {
-        router.replace(`/hunt-play/${huntId}`);
+        router.replace(`/hunt-play/${huntId}?finished=1`);
       } else {
         Alert.alert('Étape validée', 'Bravo, cette étape est terminée !');
       }
