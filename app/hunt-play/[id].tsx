@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
   },
   goldFrameInner: {
     borderRadius: 20,
-    backgroundColor: 'rgba(2,44,34,0.74)',
+    backgroundColor: 'rgba(2,44,34,0.72)',
     borderWidth: 1,
     borderColor: 'rgba(45,212,191,0.22)',
     padding: 14,
