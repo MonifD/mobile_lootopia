@@ -379,10 +379,10 @@ export default function HuntPlayScreen() {
               <GameButton icon="⭐" title="LAISSER UN AVIS" onPress={() => router.push(`/hunts/${huntId}`)} />
 
               <GameButton
-                icon="🏠"
-                title="RETOUR ACCUEIL"
-                onPress={() => router.replace('/home')}
-                colors={['#f59e0b', '#d97706', '#92400e']}
+                icon="🏅"
+                title="MES SUCCÈS"
+                onPress={() => router.replace('/(tabs)/explore')}
+                colors={['#7c3aed', '#6d28d9', '#3b0764']}
               />
             </View>
           </GoldFrame>

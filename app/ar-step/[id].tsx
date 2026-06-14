@@ -501,7 +501,7 @@ export default function ArStepScreen() {
             </Text>
             <Pressable
               style={styles.primaryButton}
-              onPress={() => router.replace(`/hunt-play/${huntId}`)}
+              onPress={() => router.replace(`/hunt-map/${huntId}`)}
             >
               <Text style={styles.primaryButtonText}>Étape suivante →</Text>
             </Pressable>
