@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Jeu_mobile",
-    "slug": "Jeu_mobile",
+    "name": "Lootopia",
+    "slug": "Lootopia",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/chasse.png",
     "scheme": "mobilelootopia",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -17,12 +17,13 @@
       "bundleIdentifier": "com.anonymous.mobile-lootopia"
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
+      // "adaptiveIcon": {
+      //   "backgroundColor": "#E6F4FE",
+      //   "foregroundImage": "./assets/images/android-icon-foreground.png",
+      //   "backgroundImage": "./assets/images/android-icon-background.png",
+      //   "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      // },
+      "icon": "./assets/images/chasse.png",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
