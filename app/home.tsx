@@ -2,7 +2,7 @@ import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -15,30 +15,59 @@ import {
   View,
 } from 'react-native';
 
+import { LevelModal } from '@/components/level-modal';
+
+import { useGems } from '@/hooks/use-gems';
+import { useApiResource } from '@/hooks/use-api-resource';
+import { useAuth } from '@/providers/auth-provider';
+import { lootopiaApi } from '@/services/lootopia-api';
+import { computeLevel } from '@/utils/level';
+
 type GameColor = 'red' | 'green' | 'blue' | 'pink' | 'gold' | 'black' | 'beige';
 
-function TopBar() {
+const TIER_ICONS: Record<string, string> = {
+  BRONZE: '🥉',
+  SILVER: '🥈',
+  GOLD: '🥇',
+  PLATINUM: '💠',
+  LEGEND: '⭐',
+};
+
+function TopBar({ gems, totalPoints }: { gems: number; totalPoints: number }) {
+  const [showModal, setShowModal] = useState(false);
+  const { numericLevel, progress, tier } = computeLevel(totalPoints);
+  const progressPct = Math.round(progress * 100);
+
   return (
     <View style={styles.topBar}>
       <View style={styles.playerBlock}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>🧭</Text>
-        </View>
+        <Pressable
+          onPress={() => setShowModal(true)}
+          style={({ pressed }) => [styles.avatar, pressed && { opacity: 0.75 }]}
+        >
+          <Text style={styles.avatarText}>{TIER_ICONS[tier] ?? '🥉'}</Text>
+        </Pressable>
 
         <View>
-          <Text style={styles.playerRole}>EXPLORATEUR</Text>
-          <Text style={styles.playerLevel}>NIVEAU 27</Text>
+          <Text style={styles.playerRole}>{tier}</Text>
+          <Text style={styles.playerLevel}>NIVEAU {numericLevel}</Text>
 
           <View style={styles.progressOuter}>
-            <View style={styles.progressInner} />
-            <Text style={styles.progressText}>65%</Text>
+            <View style={[styles.progressInner, { width: `${progressPct}%` as `${number}%` }]} />
+            <Text style={styles.progressText}>{progressPct}%</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.currencyGroup}>
-        <CurrencyPill icon="💎" value="320" />
+        <CurrencyPill icon="💎" value={String(gems)} />
       </View>
+
+      <LevelModal
+        visible={showModal}
+        totalPoints={totalPoints}
+        onClose={() => setShowModal(false)}
+      />
     </View>
   );
 }
@@ -51,9 +80,6 @@ function CurrencyPill({ icon, value }: { icon: string; value: string }) {
     >
       <Text style={styles.currencyIcon}>{icon}</Text>
       <Text style={styles.currencyValue}>{value}</Text>
-      <View style={styles.plusButton}>
-        <Text style={styles.plusText}>+</Text>
-      </View>
     </LinearGradient>
   );
 }
@@ -272,7 +298,16 @@ function BottomNavItem({
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { session } = useAuth();
+  const { gems } = useGems(session?.userId);
   const [fontsLoaded] = useFonts({ Orbitron_700Bold });
+
+  const loadProfile = useCallback(
+    () => session?.userId ? lootopiaApi.getUser(session.userId).catch(() => null) : Promise.resolve(null),
+    [session?.userId],
+  );
+  const { data: profile } = useApiResource(loadProfile);
+  const totalPoints = profile?.totalPoints ?? 0;
 
   return (
     <ImageBackground
@@ -285,7 +320,7 @@ export default function HomeScreen() {
       <View style={[styles.glow, styles.glowRight]} />
 
       <SafeAreaView style={styles.safeArea}>
-        <TopBar />
+        <TopBar gems={gems} totalPoints={totalPoints} />
 
         <View style={styles.main}>
           <LogoPanel fontsLoaded={fontsLoaded} />

@@ -13,6 +13,7 @@ import {
 import { WebView } from 'react-native-webview';
 
 import { useApiResource } from '@/hooks/use-api-resource';
+import { addGems } from '@/hooks/use-gems';
 import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
 
@@ -220,11 +221,16 @@ export default function ArStepScreen() {
         STEP_POINTS_REWARD
       );
 
+      if (participation.isLastStep) {
+        await addGems(session.userId, 10);
+      }
+
       setValidated(true);
 
+      const huntCompleteMsg = participation.isLastStep ? '\n\n💎 +10 gemmes gagnées !' : '';
       Alert.alert(
         'Étape validée',
-        `Participation #${participation.id} enregistrée (${participation.pointsEarned} points).`,
+        `Participation #${participation.id} enregistrée (${participation.pointsEarned} points).${huntCompleteMsg}`,
         [
           {
             text: 'Continuer',

@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 
+import { initGems } from '@/hooks/use-gems';
 import { createSessionFromLogin, lootopiaApi, setAuthToken } from '@/services/lootopia-api';
 import type { AuthSession } from '@/types/auth';
 
@@ -109,6 +110,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthToken(nextSession.authToken);
         await saveSession(nextSession);
         setSession(nextSession);
+        if (nextSession.userId) {
+          await initGems(nextSession.userId);
+        }
       },
       signUp: async (email: string, username: string, password: string, city?: string) => {
         await lootopiaApi.register({ email, username, password, city });

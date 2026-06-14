@@ -206,7 +206,6 @@ export default function AchievementsScreen() {
             <Text style={styles.pageTitle}>SUCCÈS</Text>
             <Text style={styles.pageSubtitle}>ACCOMPLISSEMENTS</Text>
           </View>
-          <View style={styles.iconButton} />
         </View>
 
         {(achLoading || huntLoading) ? <ActivityIndicator color="#facc15" /> : null}
@@ -361,8 +360,11 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   titleWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    flex: 1,
+    pointerEvents: 'none',
   },
   pageTitle: {
     color: '#facc15',
