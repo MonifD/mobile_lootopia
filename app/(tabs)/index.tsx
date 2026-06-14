@@ -16,6 +16,7 @@ import { AppHeader } from '@/components/app-header';
 import { useApiResource } from '@/hooks/use-api-resource';
 import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
+import { useGems } from '@/hooks/use-gems';
 import type { Hunt, HuntHistoryEntry, Participation, Step } from '@/types/game';
 
 type FilterMode = 'my-city' | 'all';
@@ -215,14 +216,16 @@ export default function HuntsScreen() {
       }
     }
 
-    return { hunts, userCity: profile?.city?.name ?? null, historyByHuntId };
+    return { hunts, userCity: profile?.city?.name ?? null, historyByHuntId, totalPoints: profile?.totalPoints ?? 0 };
   }, [session?.userId]);
 
+  const { gems } = useGems(session?.userId);
   const { data, error, loading, refresh } = useApiResource(loadData);
 
   const userCity        = data?.userCity ?? null;
   const allHunts        = data?.hunts ?? [];
   const historyByHuntId = data?.historyByHuntId ?? new Map();
+  const totalPoints     = data?.totalPoints ?? 0;
 
   const visibleHunts = useMemo<Hunt[]>(() => {
     const notCompleted = allHunts.filter(
@@ -248,7 +251,7 @@ export default function HuntsScreen() {
   return (
     <GameBackground>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <AppHeader />
+        <AppHeader gems={gems} totalPoints={totalPoints} />
 
         <GoldFrame>
           <View style={styles.summaryTop}>

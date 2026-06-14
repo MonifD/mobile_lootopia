@@ -322,19 +322,34 @@ export default function ArStepScreen() {
     if (!session?.userId || !stepId) return;
     setValidating(true);
     try {
-      const participation = await lootopiaApi.completeStep(session.userId, stepId, 10);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setValidating(true);
+
+      const participation = await lootopiaApi.completeStep(
+        session.userId,
+        stepId,
+        STEP_POINTS_REWARD
+      );
+
       if (participation.isLastStep) {
         await addGems(session.userId, 10);
-        Alert.alert('🏆 Chasse terminée !', '💎 +10 gemmes gagnées !', [
-          { text: 'Super !', onPress: () => router.replace(`/hunt-map/${huntId}`) },
-        ]);
-      } else {
-        setPhase('validated');
       }
-    } catch {
-      Alert.alert('Erreur', "Impossible de valider l'étape. Réessaie.");
-      setPhase('searching');
+
+      setValidated(true);
+
+      const huntCompleteMsg = participation.isLastStep ? '\n\n💎 +10 gemmes gagnées !' : '';
+      Alert.alert(
+        'Étape validée',
+        `Participation #${participation.id} enregistrée (${participation.pointsEarned} points).${huntCompleteMsg}`,
+        [
+          {
+            text: 'Continuer',
+            onPress: () => router.replace(`/hunt-play/${huntId}`),
+          },
+        ]
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erreur inconnue';
+      Alert.alert('Erreur de validation', message);
     } finally {
       setValidating(false);
     }

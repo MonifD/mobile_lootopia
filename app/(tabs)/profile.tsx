@@ -19,6 +19,8 @@ import {
 import { useApiResource } from '@/hooks/use-api-resource';
 import { useAuth } from '@/providers/auth-provider';
 import { API_BASE_URL, lootopiaApi } from '@/services/lootopia-api';
+import { computeLevel } from '@/utils/level';
+import { LevelModal } from '@/components/level-modal';
 
 function getLevelColor(level: string): string {
   switch (level.toUpperCase()) {
@@ -135,6 +137,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { session, signOut } = useAuth();
 
+  const [showLevelModal, setShowLevelModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editUsername, setEditUsername] = useState('');
   const [editCity, setEditCity] = useState<{ id: number; name: string; zipCode?: string } | null>(null);
@@ -336,7 +339,7 @@ export default function ProfileScreen() {
             <Text style={styles.pageSubtitle}>COMPTE JOUEUR</Text>
           </View>
 
-          <Pressable style={styles.iconButton}>
+          <Pressable style={styles.iconButton} onPress={startEdit}>
             <Text style={styles.settingsIcon}>⚙️</Text>
           </Pressable>
         </View>
@@ -375,10 +378,6 @@ export default function ProfileScreen() {
                 <View style={styles.profileInfo}>
                   <View style={styles.nameRow}>
                     <Text style={styles.username}>{profile.username}</Text>
-
-                    <Pressable onPress={startEdit} style={styles.smallEditButton}>
-                      <Text style={styles.smallEditText}>✎</Text>
-                    </Pressable>
                   </View>
 
                   <Text style={styles.email}>{profile.email}</Text>
@@ -394,29 +393,57 @@ export default function ProfileScreen() {
                       Dernière activité : {formatActivityDate(profile.lastActivityAt)}
                     </Text>
                   ) : null}
-
-                  <Text style={styles.xpLabel}>EXPÉRIENCE</Text>
-
-                  <View style={styles.xpBarOuter}>
-                    <View style={styles.xpBarInner} />
-                    <Text style={styles.xpPercent}>65%</Text>
-                  </View>
-
-                  <Text style={styles.xpText}>15 650 / 24 000 XP</Text>
                 </View>
 
-                <View
-                  style={[
-                    styles.levelShield,
-                    { borderColor: getLevelColor(profile.level) },
-                  ]}
-                >
-                  <Text style={styles.levelSmall}>NIVEAU</Text>
-                  <Text style={styles.levelNumber}>
-                    {String(profile.level).toUpperCase() === 'LEGEND' ? '★' : profile.level}
-                  </Text>
-                </View>
+                {(() => {
+                  const { numericLevel, tier } = computeLevel(profile.totalPoints);
+                  const tierIcon =
+                    tier === 'BRONZE'   ? '🥉'
+                    : tier === 'SILVER' ? '🥈'
+                    : tier === 'GOLD'   ? '🥇'
+                    : tier === 'PLATINUM' ? '💠'
+                    : '⭐';
+                  return (
+                    <Pressable
+                      onPress={() => setShowLevelModal(true)}
+                      style={({ pressed }) => pressed && { opacity: 0.75 }}
+                    >
+                      <View style={[styles.levelShield, { borderColor: getLevelColor(tier) }]}>
+                        <Text style={styles.levelShieldIcon}>{tierIcon}</Text>
+                        <View style={[styles.levelDivider, { backgroundColor: getLevelColor(tier) }]} />
+                        <Text style={styles.levelNumber}>
+                          {numericLevel >= 100 ? '★' : numericLevel}
+                        </Text>
+                        <Text style={styles.levelSmall}>NIVEAU</Text>
+                        <Text style={[styles.levelTierName, { color: getLevelColor(tier) }]}>{tier}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })()}
               </View>
+
+              {(() => {
+                const { progress, tier, nextTierThreshold } = computeLevel(profile.totalPoints);
+                const progressPct = Math.round(progress * 100);
+                const nextTierLabel =
+                  tier === 'BRONZE' ? 'SILVER'
+                  : tier === 'SILVER' ? 'GOLD'
+                  : tier === 'GOLD' ? 'PLATINUM'
+                  : 'LEGEND';
+                const xpText = nextTierThreshold
+                  ? `${profile.totalPoints} / ${nextTierThreshold} pts → ${nextTierLabel}`
+                  : `${profile.totalPoints} pts — LEGEND MAX`;
+                return (
+                  <View style={styles.xpSection}>
+                    <Text style={styles.xpLabel}>EXPÉRIENCE</Text>
+                    <View style={styles.xpBarOuter}>
+                      <View style={[styles.xpBarInner, { width: `${progressPct}%` as `${number}%` }]} />
+                      <Text style={styles.xpPercent}>{progressPct}%</Text>
+                    </View>
+                    <Text style={styles.xpText}>{xpText}</Text>
+                  </View>
+                );
+              })()}
 
               {avatarUrl ? (
                 <Pressable onPress={confirmDeleteAvatar} disabled={isUploadingAvatar}>
@@ -550,19 +577,17 @@ export default function ProfileScreen() {
             ) : null}
 
             <ActionButton
-              icon="👤"
-              title="MODIFIER LE PROFIL"
-              subtitle="Change ton nom ou ta ville"
-              color="#065f46"
-              onPress={startEdit}
-            />
-
-            <ActionButton
               icon="🚪"
               title="SE DÉCONNECTER"
               subtitle="Quitter ton compte"
               color="#0f3a5f"
               onPress={() => void handleLogout()}
+            />
+
+            <LevelModal
+              visible={showLevelModal}
+              totalPoints={profile.totalPoints}
+              onClose={() => setShowLevelModal(false)}
             />
           </>
         ) : null}
@@ -611,6 +636,7 @@ const styles = StyleSheet.create({
   settingsIcon: {
     fontSize: 26,
   },
+
   titleWrap: {
     alignItems: 'center',
   },
@@ -647,7 +673,7 @@ const styles = StyleSheet.create({
   },
   goldFrameInner: {
     borderRadius: 20,
-    backgroundColor: 'rgba(8,38,30,0.94)',
+    backgroundColor: 'rgba(2,44,34,0.72)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.16)',
     padding: 14,
@@ -844,24 +870,51 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
+  xpSection: {
+    marginTop: 10,
+    gap: 4,
+  },
+
   levelShield: {
-    width: 62,
-    height: 78,
+    width: 68,
+    height: 108,
     borderRadius: 16,
-    backgroundColor: '#241607',
+    backgroundColor: '#1a0f04',
     borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 2,
+  },
+  levelShieldIcon: {
+    fontSize: 26,
+    lineHeight: 30,
+  },
+  levelDivider: {
+    width: 36,
+    height: 1.5,
+    borderRadius: 999,
+    marginVertical: 2,
+    opacity: 0.6,
   },
   levelSmall: {
-    color: '#fef3c7',
-    fontSize: 9,
+    color: '#a8916a',
+    fontSize: 8,
     fontWeight: '900',
+    letterSpacing: 1,
+    marginTop: -2,
   },
   levelNumber: {
     color: '#facc15',
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '900',
+    lineHeight: 30,
+  },
+  levelTierName: {
+    fontSize: 7.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    marginTop: 1,
   },
 
   editTitle: {

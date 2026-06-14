@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomNav } from '@/components/app-footer';
 import { ThemedText } from '@/components/themed-text';
 import { useApiResource } from '@/hooks/use-api-resource';
+import { addGems } from '@/hooks/use-gems';
 import { usePlayerLocation } from '@/hooks/use-player-location';
 import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
@@ -353,6 +354,47 @@ const doneStepIds = useMemo<Set<number>>(() => {
   };
 
 
+    if (!session?.userId) {
+      Alert.alert('Connexion requise', 'Tu dois être connecté pour valider une étape.');
+      return;
+    }
+
+    if (!forceArTestMode && !nearStepIds.has(selectedStep.id)) {
+      Alert.alert('Trop loin', `Approche-toi à moins de ${PROXIMITY_RADIUS} m de l’étape.`);
+      return;
+    }
+
+    if (doneStepIds.has(selectedStep.id)) {
+      return;
+    }
+
+    try {
+      setValidatingStepId(selectedStep.id);
+
+      const participation = await lootopiaApi.completeStep(session.userId, selectedStep.id, STEP_POINTS_REWARD);
+
+      if (participation.isLastStep) {
+        await addGems(session.userId, 10);
+      }
+
+      setLocalDoneStepIds((previous) => {
+        const next = new Set(previous);
+        next.add(selectedStep.id);
+        return next;
+      });
+
+      await refreshParticipations();
+      const huntCompleteMsg = participation.isLastStep
+        ? 'Bravo, cette étape est terminée !\n\n💎 Chasse terminée ! +10 gemmes gagnées !'
+        : 'Bravo, cette étape est terminée !';
+      Alert.alert('Étape validée', huntCompleteMsg);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erreur inconnue';
+      Alert.alert('Erreur', message);
+    } finally {
+      setValidatingStepId(null);
+    }
+  };
 
   return (
     <View style={styles.container}>

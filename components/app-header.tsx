@@ -1,46 +1,66 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-type Props = {};
+import { LevelModal } from '@/components/level-modal';
+import { computeLevel } from '@/utils/level';
+
+type Props = { gems?: number; totalPoints?: number };
+
+const TIER_ICONS: Record<string, string> = {
+  BRONZE: '🥉',
+  SILVER: '🥈',
+  GOLD: '🥇',
+  PLATINUM: '💠',
+  LEGEND: '⭐',
+};
 
 function CurrencyPill({ icon, value }: { icon: string; value: string }) {
   return (
     <LinearGradient colors={["#2b1b0a", "#0f0a05"]} style={styles.currencyPill}>
       <Text style={styles.currencyIcon}>{icon}</Text>
       <Text style={styles.currencyValue}>{value}</Text>
-      <View style={styles.plusButton}>
-        <Text style={styles.plusText}>+</Text>
-      </View>
     </LinearGradient>
   );
 }
 
-export function AppHeader(_: Props) {
+export function AppHeader({ gems = 0, totalPoints = 0 }: Props) {
   const router = useRouter();
+  const [showModal, setShowModal] = useState(false);
+  const { numericLevel, progress, tier } = computeLevel(totalPoints);
+  const progressPct = Math.round(progress * 100);
 
   return (
     <View style={styles.topBar}>
       <View style={styles.playerBlock}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>🧭</Text>
-        </View>
+        <Pressable
+          onPress={() => setShowModal(true)}
+          style={({ pressed }) => [styles.avatar, pressed && { opacity: 0.75 }]}
+        >
+          <Text style={styles.avatarText}>{TIER_ICONS[tier] ?? '🥉'}</Text>
+        </Pressable>
 
         <View>
-          <Text style={styles.playerRole}>EXPLORATEUR</Text>
-          <Text style={styles.playerLevel}>NIVEAU 27</Text>
+          <Text style={styles.playerRole}>{tier}</Text>
+          <Text style={styles.playerLevel}>NIVEAU {numericLevel}</Text>
 
           <View style={styles.progressOuter}>
-            <View style={styles.progressInner} />
-            <Text style={styles.progressText}>65%</Text>
+            <View style={[styles.progressInner, { width: `${progressPct}%` as `${number}%` }]} />
+            <Text style={styles.progressText}>{progressPct}%</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.currencyGroup}>
-        <CurrencyPill icon="💎" value="320" />
+        <CurrencyPill icon="💎" value={String(gems)} />
       </View>
+
+      <LevelModal
+        visible={showModal}
+        totalPoints={totalPoints}
+        onClose={() => setShowModal(false)}
+      />
     </View>
   );
 }
