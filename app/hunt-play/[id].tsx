@@ -248,6 +248,7 @@ export default function HuntPlayScreen() {
         done.add(stepId);
       }
     }
+    console.log('completedStepIds:', [...done]);
 
     return done;
   }, [data?.participations, steps]);

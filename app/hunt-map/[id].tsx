@@ -22,7 +22,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { lootopiaApi } from '@/services/lootopia-api';
 import type { Step } from '@/types/game';
 
-const PROXIMITY_RADIUS = 2000;
+const PROXIMITY_RADIUS = 5;
 const MAP_FOLLOW_INTERVAL_MS = 1500;
 const FOOTER_CLEARANCE = 86;
 
@@ -490,8 +490,15 @@ const doneStepIds = useMemo<Set<number>>(() => {
             <View style={[styles.legendDot, { backgroundColor: '#0f766e' }]} />
             <ThemedText style={styles.legendText}>Étape à portée</ThemedText>
           </View>
-
+{/* 
 {doneStepIds.size > 0 ? (
+  <View style={styles.legendItem}>
+    <View style={[styles.legendDot, { backgroundColor: '#16a34a' }]} />
+    <ThemedText style={styles.legendText}>Étape validée ✓</ThemedText>
+  </View>
+) : null} */}
+
+{selectedStep && doneStepIds.has(selectedStep.id) ? (
   <View style={styles.legendItem}>
     <View style={[styles.legendDot, { backgroundColor: '#16a34a' }]} />
     <ThemedText style={styles.legendText}>Étape validée ✓</ThemedText>
