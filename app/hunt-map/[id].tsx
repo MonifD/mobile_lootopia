@@ -768,11 +768,11 @@ const pinStyles = StyleSheet.create({
   // },
 treasureWrap: {
   width: 56,
-  height: 68,
+  height: 56,
   alignItems: 'center',
-  justifyContent: 'flex-end',  // ← colle l'image en bas
+  justifyContent: 'center',
+  overflow: 'visible',  // ← ajoute ça
 },
-
   treasureSelected: {
     transform: [{ scale: 1.16 }],
   },
