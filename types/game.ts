@@ -89,7 +89,10 @@ export type Step = {
   clue: string;
   latitude: number;
   longitude: number;
+  /** Image du marqueur (.jpg) — aperçu uniquement */
   arMarkerUrl: string | null;
+  /** Fichier pattern AR.js (.patt) — c'est CELUI-CI qu'utilise la détection AR */
+  arMarkerPattUrl: string | null;
   /** IRI de la chasse parente, ex: "/api/hunts/1" */
   hunt?: string;
 };

@@ -331,6 +331,7 @@ function normalizeStep(raw: unknown, index: number): Step {
     latitude: parseFloat(toString(source.latitude, '0')),
     longitude: parseFloat(toString(source.longitude, '0')),
     arMarkerUrl: toNullableString(source.arMarkerUrl ?? source.ar_marker_url),
+    arMarkerPattUrl: toNullableString(source.arMarkerPattUrl ?? source.ar_marker_patt_url),
     hunt: typeof hunt === 'string' ? hunt : undefined,
   };
 }

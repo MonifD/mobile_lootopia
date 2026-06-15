@@ -278,8 +278,10 @@ export default function ArStepScreen() {
   const { data: step, loading: stepLoading, error: stepError } =
     useApiResource(loadStep);
 
-  const arMarkerUrl = step?.arMarkerUrl ?? null;
-  const htmlSource  = useMemo(() => buildArHtml(arMarkerUrl), [arMarkerUrl]);
+  // .jpg = aperçu navigateur uniquement ; .patt = fichier consommé par AR.js.
+  const arMarkerUrl     = step?.arMarkerUrl ?? null;
+  const arMarkerPattUrl = step?.arMarkerPattUrl ?? null;
+  const htmlSource      = useMemo(() => buildArHtml(arMarkerPattUrl), [arMarkerPattUrl]);
 
   // ── Camera permission ─────────────────────────────────────────────────────
 
