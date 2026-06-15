@@ -349,7 +349,7 @@ const doneStepIds = useMemo<Set<number>>(() => {
 
   // ajout 2 
   useEffect(() => {
-  const timer = setTimeout(() => setTracksViewChanges(false), 2000);
+  const timer = setTimeout(() => setTracksViewChanges(true), 2000);
   return () => clearTimeout(timer);
 }, []);
 
