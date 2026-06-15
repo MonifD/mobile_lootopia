@@ -766,12 +766,11 @@ const pinStyles = StyleSheet.create({
   //   alignItems: 'center',
   //   justifyContent: 'center',
   // },
-  treasureWrap: {
+treasureWrap: {
   width: 56,
-  height: 68,  // ← augmente la hauteur
+  height: 68,
   alignItems: 'center',
-  justifyContent: 'center',
-  paddingTop: 12,  // ← espace pour le badge au-dessus
+  justifyContent: 'flex-end',  // ← colle l'image en bas
 },
 
   treasureSelected: {
