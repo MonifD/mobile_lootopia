@@ -32,7 +32,12 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.lootopia.app.master"
+      "package": "com.lootopia.app.master",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyB8LpuyIn4DVwVHPWnxopzf_ilu8JVnKeo"
+        }
+      }
     },
     "web": {
       "output": "static",
