@@ -135,6 +135,8 @@ export default function HuntMapScreen() {
   const [autoFollowEnabled, setAutoFollowEnabled] = useState(true);
   const [isMapReady, setIsMapReady] = useState(false);
 
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+
   const { location, error: locationError, permissionDenied, isLoading: locationLoading } =
     usePlayerLocation();
 
@@ -345,6 +347,12 @@ const doneStepIds = useMemo<Set<number>>(() => {
     setSelectedStep(null);
   }, [selectedStep, visibleSteps]);
 
+  // ajout 2 
+  useEffect(() => {
+  const timer = setTimeout(() => setTracksViewChanges(false), 2000);
+  return () => clearTimeout(timer);
+}, []);
+
   const openArMarker = async (url: string) => {
     try {
       await WebBrowser.openBrowserAsync(url, {
@@ -510,13 +518,37 @@ const doneStepIds = useMemo<Set<number>>(() => {
               </Marker>
             </>
           ) : null}
-          {visibleSteps.map((step) => (
+          {/* {visibleSteps.map((step) => (
   <Marker
     key={step.id}
     coordinate={{ latitude: step.latitude, longitude: step.longitude }}
     anchor={{ x: 0.5, y: 0.5 }}
     tappable
     tracksViewChanges={false}
+    onPress={(event) => {
+      event.stopPropagation();
+      setSelectedStep(step);
+    }}
+    zIndex={selectedStep?.id === step.id ? 99 : 5}
+  >
+    <Pressable onPress={() => setSelectedStep(step)} hitSlop={20}>
+      <StepPin
+        index={Math.max(0, step.orderNumber - 1)}
+        isNear={nearStepIds.has(step.id)}
+        isSelected={selectedStep?.id === step.id}
+        isDone={doneStepIds.has(step.id)}
+      />
+    </Pressable>
+  </Marker>
+))} */}
+
+{visibleSteps.map((step) => (
+  <Marker
+    key={step.id}
+    coordinate={{ latitude: step.latitude, longitude: step.longitude }}
+    anchor={{ x: 0.5, y: 0.5 }}
+    tappable
+    tracksViewChanges={Platform.OS === 'android' ? tracksViewChanges : false}
     onPress={(event) => {
       event.stopPropagation();
       setSelectedStep(step);
