@@ -760,18 +760,12 @@ const markerStyles = StyleSheet.create({
 });
 
 const pinStyles = StyleSheet.create({
-  // treasureWrap: {
-  //   width: 56,
-  //   height: 56,
-  //   alignItems: 'center',
-  //   justifyContent: 'center',
-  // },
 treasureWrap: {
   width: 56,
   height: 56,
   alignItems: 'center',
   justifyContent: 'center',
-  overflow: 'visible',  // ← ajoute ça
+  overflow: 'visible', 
 },
   treasureSelected: {
     transform: [{ scale: 1.16 }],
