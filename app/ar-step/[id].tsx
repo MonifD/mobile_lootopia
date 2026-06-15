@@ -52,16 +52,16 @@ function buildArHtml(markerPatternUrl?: string | null): string {
     : null;
 
   const markerTag = hasPattern
-    ? `<a-marker type="pattern" url="${safeMarkerUrl}">`
-    : '<a-marker preset="hiro">';
+    ? `<a-marker type="pattern" url="${safeMarkerUrl}" patternRatio="0.5" emitevents="true">`
+    : '<a-marker preset="hiro" emitevents="true">';
 
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.2/aframe/build/aframe-ar.js" crossorigin="anonymous"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -174,8 +174,8 @@ function buildArHtml(markerPatternUrl?: string | null): string {
   <a-scene
     embedded
     vr-mode-ui="enabled: false"
-    renderer="logarithmicDepthBuffer: true; colorManagement: true;"
-    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+    renderer="logarithmicDepthBuffer: false;"
+    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono;"
   >
     ${markerTag}
       <a-box
@@ -279,8 +279,8 @@ export default function ArStepScreen() {
     useApiResource(loadStep);
 
   // .jpg = aperçu navigateur uniquement ; .patt = fichier consommé par AR.js.
-  const arMarkerUrl     = step?.arMarkerUrl ?? null;
-  const arMarkerPattUrl = step?.arMarkerPattUrl ?? null;
+  const arMarkerUrl     = step?.arMarkerUrl?.replace(/^http:\/\//i, 'https://') ?? null;
+  const arMarkerPattUrl = step?.arMarkerPattUrl?.replace(/^http:\/\//i, 'https://') ?? null;
   const htmlSource      = useMemo(() => buildArHtml(arMarkerPattUrl), [arMarkerPattUrl]);
 
   // ── Camera permission ─────────────────────────────────────────────────────
@@ -554,7 +554,7 @@ export default function ArStepScreen() {
         mixedContentMode="always"
         allowFileAccess
         allowUniversalAccessFromFileURLs
-        mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
+        mediaCapturePermissionGrantType="grant"
         onMessage={handleWebViewMessage}
         onError={(e) => setWebviewError(e.nativeEvent.description || 'Erreur WebView')}
         onHttpError={(e) => setWebviewError(`HTTP ${e.nativeEvent.statusCode}`)}
