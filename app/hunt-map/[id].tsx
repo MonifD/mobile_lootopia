@@ -349,7 +349,7 @@ const doneStepIds = useMemo<Set<number>>(() => {
 
   // ajout 2 
   useEffect(() => {
-  const timer = setTimeout(() => setTracksViewChanges(true), 2000);
+  const timer = setTimeout(() => setTracksViewChanges(false), 2000);
   return () => clearTimeout(timer);
 }, []);
 
@@ -541,14 +541,13 @@ const doneStepIds = useMemo<Set<number>>(() => {
     </Pressable>
   </Marker>
 ))} */}
-
 {visibleSteps.map((step) => (
   <Marker
     key={step.id}
     coordinate={{ latitude: step.latitude, longitude: step.longitude }}
     anchor={{ x: 0.5, y: 0.5 }}
     tappable
-    tracksViewChanges={Platform.OS === 'android' ? tracksViewChanges : false}
+    tracksViewChanges={true}
     onPress={(event) => {
       event.stopPropagation();
       setSelectedStep(step);
