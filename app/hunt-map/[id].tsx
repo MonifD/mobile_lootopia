@@ -760,12 +760,19 @@ const markerStyles = StyleSheet.create({
 });
 
 const pinStyles = StyleSheet.create({
+  // treasureWrap: {
+  //   width: 56,
+  //   height: 56,
+  //   alignItems: 'center',
+  //   justifyContent: 'center',
+  // },
   treasureWrap: {
-    width: 56,
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  width: 56,
+  height: 68,  // ← augmente la hauteur
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingTop: 12,  // ← espace pour le badge au-dessus
+},
 
   treasureSelected: {
     transform: [{ scale: 1.16 }],
