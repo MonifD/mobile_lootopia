@@ -97,17 +97,23 @@ function StepPin({
   isDone: boolean;
 }) {
   return (
-    <View style={[pinStyles.treasureWrap, isSelected && pinStyles.treasureSelected]}>
-      {isNear && !isDone ? <View style={pinStyles.treasureGlow} /> : null}
+    <View style={{ alignItems: 'center' }}>
+      {/* Badge numéro flottant AU DESSUS, indépendant du carré */}
+      <View style={pinStyles.treasureNumber}>
+        <ThemedText style={pinStyles.treasureNumberText}>
+          {isDone ? '✓' : index + 1}
+        </ThemedText>
+      </View>
 
-      <Image
-        source={require('@/assets/images/tresor.png')}
-        style={[pinStyles.treasureImage, isDone && pinStyles.treasureDone]}
-      />
-
-      <ThemedText style={pinStyles.treasureNumber}>
-        {isDone ? '✓' : index + 1}
-      </ThemedText>
+      {/* Carré de l'image */}
+      <View style={[pinStyles.treasureWrap, isSelected && pinStyles.treasureSelected]}>
+        {isNear && !isDone ? <View style={pinStyles.treasureGlow} /> : null}
+        <Image
+          source={require('@/assets/images/tresor.png')}
+          style={pinStyles.treasureImage}
+          // opacity={isDone ? 0.65 : 1}
+        />
+      </View>
     </View>
   );
 }
@@ -761,8 +767,8 @@ const markerStyles = StyleSheet.create({
 
 const pinStyles = StyleSheet.create({
 treasureWrap: {
-  width: 56,
-  height: 56,
+  width: 40,
+  height: 40,
   alignItems: 'center',
   justifyContent: 'center',
   overflow: 'visible', 
@@ -791,9 +797,9 @@ treasureWrap: {
 
 treasureNumber: {
   position: 'absolute',
-  top: -8,
+  top: -4,
 
-  minWidth: 24,
+  minWidth: 23,
   height: 24,
   paddingHorizontal: 6,
 
@@ -813,7 +819,16 @@ treasureNumber: {
   textShadowColor: '#000',
   textShadowOffset: { width: 0, height: 1 },
   textShadowRadius: 2,
+  zIndex: 10,
 },
+  treasureNumberText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
 });
 
 const styles = StyleSheet.create({

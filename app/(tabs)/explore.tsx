@@ -249,65 +249,7 @@ export default function AchievementsScreen() {
           <HuntHistoryCard key={`cp-${entry.hunt.id}`} entry={entry} />
         ))}
 
-        {/* Séparateur */}
-        <View style={styles.separator}>
-          <View style={styles.separatorLine} />
-          <Text style={styles.separatorGem}>◆</Text>
-          <View style={styles.separatorLine} />
-        </View>
-
-        {/* ── BADGES ───────────────────────────────────────────────────────── */}
-        <SectionHeader icon="🎖️" title="BADGES" subtitle="Accomplissements débloqués" color="#facc15" />
-
-        <GoldFrame>
-          <Text style={styles.heroLogo}>🎖️ LOOTOPIA</Text>
-          <Text style={styles.heroTitle}>PROGRESSION JOUEUR</Text>
-          <Text style={styles.heroText}>
-            Débloque des badges, gagne des points et monte en puissance à chaque mission.
-          </Text>
-        </GoldFrame>
-
-        {achievements?.length ? (
-          achievements.map((achievement: Achievement) => {
-            const rarityColor = getRarityColor(achievement.type);
-            return (
-              <LinearGradient
-                key={achievement.id}
-                colors={['#fff3a3', rarityColor, '#7c2d12']}
-                style={styles.achievementBorder}
-              >
-                <LinearGradient colors={['#08261e', '#102018']} style={styles.achievementCard}>
-                  <View style={styles.cardGloss} />
-                  <View style={[styles.badgeIconWrap, { borderColor: rarityColor }]}>
-                    <Text style={styles.badgeIcon}>{getAchievementIcon(achievement.type)}</Text>
-                  </View>
-                  <View style={styles.achievementMain}>
-                    <View style={styles.achievementHeader}>
-                      <Text style={styles.achievementTitle}>{achievement.name}</Text>
-                      <View style={styles.pointsBadge}>
-                        <Text style={styles.points}>{achievement.pointsReward} pts</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.description}>{achievement.description}</Text>
-                    {achievement.threshold > 1 ? (
-                      <Text style={styles.threshold}>Seuil : {achievement.threshold}</Text>
-                    ) : null}
-                  </View>
-                </LinearGradient>
-              </LinearGradient>
-            );
-          })
-        ) : (
-          !achLoading ? (
-            <GoldFrame>
-              <Text style={styles.emptyIcon}>🔒</Text>
-              <Text style={styles.emptyTitle}>Aucun badge débloqué</Text>
-              <Text style={styles.emptyText}>
-                Continue tes chasses au trésor pour révéler tes premiers accomplissements.
-              </Text>
-            </GoldFrame>
-          ) : null
-        )}
+        
 
       </ScrollView>
     </ImageBackground>
