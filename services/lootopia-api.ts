@@ -1,4 +1,9 @@
-import type { AuthSession, LoginPayload, LoginResponse, RegisterPayload } from '@/types/auth';
+import type {
+    AuthSession,
+    LoginPayload,
+    LoginResponse,
+    RegisterPayload,
+} from "@/types/auth";
 import type {
     Achievement,
     Hunt,
@@ -11,13 +16,13 @@ import type {
     PlayerProfile,
     Step,
     UserRank,
-} from '@/types/game';
-import { Platform } from 'react-native';
+} from "@/types/game";
+import { Platform } from "react-native";
 
-const FALLBACK_API_URL = 'http://10.0.2.2:8080/api';
+const FALLBACK_API_URL = "http://10.0.2.2:8080/api";
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? FALLBACK_API_URL;
-const LOGIN_PATH = process.env.EXPO_PUBLIC_LOGIN_PATH ?? '/login';
+const LOGIN_PATH = process.env.EXPO_PUBLIC_LOGIN_PATH ?? "/login";
 
 let bearerToken: string | null = null;
 
@@ -25,11 +30,11 @@ type ApiErrorPayload = {
   message?: string;
   error?: string;
   detail?: string;
-  'hydra:description'?: string;
+  "hydra:description"?: string;
 };
 
 type HydraCollection<T> = {
-  'hydra:member'?: T[];
+  "hydra:member"?: T[];
 };
 
 type PrimitiveRecord = Record<string, unknown>;
@@ -45,12 +50,12 @@ class ApiRequestError extends Error {
   constructor(message: string, status: number) {
     super(message);
     this.status = status;
-    this.name = 'ApiRequestError';
+    this.name = "ApiRequestError";
   }
 }
 
 function buildUrl(path: string): string {
-  return `${API_BASE_URL.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+  return `${API_BASE_URL.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
 }
 
 function parseJsonSafe(text: string): unknown {
@@ -66,7 +71,7 @@ function parseJsonSafe(text: string): unknown {
 }
 
 function unwrapData<T>(payload: unknown): T {
-  if (payload && typeof payload === 'object' && 'data' in payload) {
+  if (payload && typeof payload === "object" && "data" in payload) {
     return (payload as { data: T }).data;
   }
 
@@ -80,15 +85,15 @@ function unwrapCollection<T>(payload: unknown): T[] {
     return data as T[];
   }
 
-  if (data && typeof data === 'object') {
+  if (data && typeof data === "object") {
     const obj = data as Record<string, unknown>;
 
-    if ('hydra:member' in obj) {
-      return (obj['hydra:member'] as T[]) ?? [];
+    if ("hydra:member" in obj) {
+      return (obj["hydra:member"] as T[]) ?? [];
     }
 
-    if ('member' in obj) {
-      return (obj['member'] as T[]) ?? [];
+    if ("member" in obj) {
+      return (obj["member"] as T[]) ?? [];
     }
   }
 
@@ -105,20 +110,20 @@ function toNullableNumber(value: unknown): number | null {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
-function toString(value: unknown, fallback = ''): string {
-  return typeof value === 'string' ? value : fallback;
+function toString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
 }
 
 function toNullableString(value: unknown): string | null {
-  return typeof value === 'string' ? value : null;
+  return typeof value === "string" ? value : null;
 }
 
 function parseResourceId(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const direct = Number(value);
     if (Number.isFinite(direct)) {
       return direct;
@@ -138,15 +143,16 @@ function parseResourceId(value: unknown): number | null {
 
 function decodeBase64Url(input: string): string | null {
   try {
-    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized + '='.repeat((4 - (normalized.length % 4 || 4)) % 4);
+    const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+    const padded =
+      normalized + "=".repeat((4 - (normalized.length % 4 || 4)) % 4);
 
-    if (typeof globalThis.atob === 'function') {
+    if (typeof globalThis.atob === "function") {
       return globalThis.atob(padded);
     }
 
-    if (typeof Buffer !== 'undefined') {
-      return Buffer.from(padded, 'base64').toString('utf-8');
+    if (typeof Buffer !== "undefined") {
+      return Buffer.from(padded, "base64").toString("utf-8");
     }
 
     return null;
@@ -155,12 +161,14 @@ function decodeBase64Url(input: string): string | null {
   }
 }
 
-function parseJwtPayload(token: string | null | undefined): PrimitiveRecord | null {
+function parseJwtPayload(
+  token: string | null | undefined,
+): PrimitiveRecord | null {
   if (!token) {
     return null;
   }
 
-  const segments = token.split('.');
+  const segments = token.split(".");
   if (segments.length < 2) {
     return null;
   }
@@ -178,7 +186,7 @@ function parseJwtPayload(token: string | null | undefined): PrimitiveRecord | nu
 }
 
 function parseUserIriToId(value: unknown): number | null {
-  if (typeof value !== 'string') {
+  if (typeof value !== "string") {
     return null;
   }
 
@@ -191,7 +199,7 @@ function parseUserIriToId(value: unknown): number | null {
 }
 
 function parseStepIriToId(value: unknown): number | null {
-  if (typeof value !== 'string') {
+  if (typeof value !== "string") {
     return null;
   }
 
@@ -203,7 +211,9 @@ function parseStepIriToId(value: unknown): number | null {
   return toNullableNumber(iriMatch[1]);
 }
 
-function extractIdentityFromToken(token: string | null | undefined): Partial<LoginIdentity> {
+function extractIdentityFromToken(
+  token: string | null | undefined,
+): Partial<LoginIdentity> {
   const payload = parseJwtPayload(token);
   if (!payload) {
     return {};
@@ -220,13 +230,12 @@ function extractIdentityFromToken(token: string | null | undefined): Partial<Log
     null;
 
   const email =
-    toString(payload.email, '') ||
-    toString(payload.preferred_username, '') ||
-    toString(payload.username, '');
+    toString(payload.email, "") ||
+    toString(payload.preferred_username, "") ||
+    toString(payload.username, "");
 
   const username =
-    toString(payload.username, '') ||
-    toString(payload.preferred_username, '');
+    toString(payload.username, "") || toString(payload.preferred_username, "");
 
   return {
     id,
@@ -235,7 +244,10 @@ function extractIdentityFromToken(token: string | null | undefined): Partial<Log
   };
 }
 
-function normalizeLeaderboardEntry(raw: unknown, index: number): LeaderboardEntry {
+function normalizeLeaderboardEntry(
+  raw: unknown,
+  index: number,
+): LeaderboardEntry {
   const source = (raw ?? {}) as PrimitiveRecord;
   const user = source.user as PrimitiveRecord | undefined;
 
@@ -243,47 +255,90 @@ function normalizeLeaderboardEntry(raw: unknown, index: number): LeaderboardEntr
     id: toNumber(source.id, index + 1),
 
     username: toString(
-      source.username ||
-      source.userName ||
-      source.name ||
-      user?.username,
-      'Joueur'
+      source.username || source.userName || source.name || user?.username,
+      "Joueur",
     ),
 
     city: toNullableString(source.city ?? user?.city),
 
-    level: toString(source.level, 'BRONZE'),
+    level: toString(source.level, "BRONZE"),
 
-    totalPoints: toNumber(
-      source.totalPoints ??
-      source.points ??
-      source.score
-    ),
+    totalPoints: toNumber(source.totalPoints ?? source.points ?? source.score),
 
     completedHunts: toNumber(
       source.completedHunts ??
-      source.huntsCompleted
+        source.huntsCompleted ??
+        source.completed_hunts ??
+        source.hunts_completed ??
+        source.completedHuntsCount ??
+        source.huntsCount ??
+        user?.completedHunts ??
+        user?.completed_hunts,
     ),
 
     loginStreak: toNumber(
       source.loginStreak ??
-      source.streak
+        source.streak ??
+        source.login_streak ??
+        source.consecutiveLogins ??
+        source.consecutive_logins ??
+        source.streakDays ??
+        source.streak_days ??
+        user?.loginStreak ??
+        user?.login_streak,
     ),
 
-    rank: source.rank != null
-      ? toNumber(source.rank)
-      : index + 1,
+    rank: source.rank != null ? toNumber(source.rank) : index + 1,
   };
 }
 
 function normalizeLeaderboardStats(raw: unknown): LeaderboardStats {
-  const source = (raw ?? {}) as PrimitiveRecord;
+  console.log("[DEBUG] leaderboard/stats raw:", JSON.stringify(raw));
+  const source = unwrapData<PrimitiveRecord>(raw ?? {}) as PrimitiveRecord;
 
   return {
-    totalPlayers: toNumber(source.totalPlayers || source.players || source.total_users),
-    totalPoints: toNumber(source.totalPoints || source.points || source.total_points),
-    totalCompletedHunts: toNumber(source.totalCompletedHunts || source.completedHunts || source.total_hunts),
-    averagePoints: toNumber(source.averagePoints || source.avgPoints || source.average_points),
+    totalPlayers: toNumber(
+      source.totalPlayers ??
+        source.players ??
+        source.total_users ??
+        source.usersCount ??
+        source.users_count,
+    ),
+    totalPoints: toNumber(
+      source.totalPoints ?? source.points ?? source.total_points,
+    ),
+    totalCompletedHunts: toNumber(
+      source.totalCompletedHunts ??
+        source.completedHunts ??
+        source.total_hunts ??
+        source.total_completed_hunts,
+    ),
+    averagePoints: toNumber(
+      source.averagePoints ??
+        source.avgPoints ??
+        source.average_points ??
+        source.avg_points,
+    ),
+  };
+}
+
+function normalizeUserRank(raw: unknown): UserRank {
+  console.log("[DEBUG] leaderboard/my-rank raw:", JSON.stringify(raw));
+  const source = unwrapData<PrimitiveRecord>(raw ?? {}) as PrimitiveRecord;
+
+  return {
+    rank: toNumber(
+      source.rank ?? source.position ?? source.userRank ?? source.user_rank,
+      0,
+    ),
+    total: toNumber(
+      source.total ?? source.totalPlayers ?? source.total_players,
+      0,
+    ),
+    percentile: toNumber(
+      source.percentile ?? source.percent ?? source.percentage,
+      0,
+    ),
   };
 }
 
@@ -300,7 +355,7 @@ function normalizeReview(raw: unknown, index: number): HuntReview {
     user: userValue
       ? {
           id: toNumber(userValue.id),
-          username: toString(userValue.username || userValue.name, 'Joueur'),
+          username: toString(userValue.username || userValue.name, "Joueur"),
         }
       : null,
   };
@@ -310,9 +365,15 @@ function normalizeReviewStats(raw: unknown): HuntReviewStats {
   const source = (raw ?? {}) as PrimitiveRecord;
 
   return {
-    averageRating: toNumber(source.averageRating || source.average || source.rating_avg),
+    averageRating: toNumber(
+      source.averageRating || source.average || source.rating_avg,
+    ),
     totalReviews: toNumber(source.totalReviews || source.total || source.count),
-    distribution: ((source.distribution || source.breakdown || {}) as Record<string, number>) ?? {},
+    distribution:
+      ((source.distribution || source.breakdown || {}) as Record<
+        string,
+        number
+      >) ?? {},
   };
 }
 
@@ -327,19 +388,23 @@ function normalizeStep(raw: unknown, index: number): Step {
   return {
     id: toNumber(source.id, index + 1),
     orderNumber: toNumber(source.orderNumber ?? source.order_number, index + 1),
-    clue: toString(source.clue, ''),
-    latitude: parseFloat(toString(source.latitude, '0')),
-    longitude: parseFloat(toString(source.longitude, '0')),
+    clue: toString(source.clue, ""),
+    latitude: parseFloat(toString(source.latitude, "0")),
+    longitude: parseFloat(toString(source.longitude, "0")),
     arMarkerUrl: toNullableString(source.arMarkerUrl ?? source.ar_marker_url),
-    arMarkerPattUrl: toNullableString(source.arMarkerPattUrl ?? source.ar_marker_patt_url),
-    hunt: typeof hunt === 'string' ? hunt : undefined,
+    arMarkerPattUrl: toNullableString(
+      source.arMarkerPattUrl ?? source.ar_marker_patt_url,
+    ),
+    hunt: typeof hunt === "string" ? hunt : undefined,
   };
 }
 
 function isStepFromHunt(step: Step, huntId: number): boolean {
   if (!step.hunt) return false;
 
-  return step.hunt === `/api/hunts/${huntId}` || step.hunt.endsWith(`/${huntId}`);
+  return (
+    step.hunt === `/api/hunts/${huntId}` || step.hunt.endsWith(`/${huntId}`)
+  );
 }
 
 function normalizeHunt(raw: unknown): Hunt {
@@ -348,37 +413,40 @@ function normalizeHunt(raw: unknown): Hunt {
   // Le sérialiseur Symfony interprète isActive() comme getter de "active" (sans préfixe "is")
   // mais ne l'associe pas à la propriété $isActive → le champ disparaît de la réponse.
   // Fallback : si tous les variants sont absents, la valeur par défaut de l'entité est true.
-  const isActiveRaw =
-    source.isActive ??
-    source.is_active ??
-    source.active;
+  const isActiveRaw = source.isActive ?? source.is_active ?? source.active;
   const isActive =
     isActiveRaw === undefined
-      ? true  // champ absent = valeur par défaut de l'entité PHP (true)
-      : isActiveRaw === true || isActiveRaw === 1 || isActiveRaw === 'true' || isActiveRaw === '1';
+      ? true // champ absent = valeur par défaut de l'entité PHP (true)
+      : isActiveRaw === true ||
+        isActiveRaw === 1 ||
+        isActiveRaw === "true" ||
+        isActiveRaw === "1";
 
-  const id =
-    parseResourceId(source.id) ??
-    parseResourceId(source['@id']) ??
-    0;
+  const id = parseResourceId(source.id) ?? parseResourceId(source["@id"]) ?? 0;
 
   return {
     id,
     title: toString(source.title),
     description: toNullableString(source.description),
-    city: typeof source.city === 'object' && source.city !== null
-      ? toNullableString((source.city as PrimitiveRecord)['name'])
-      : toNullableString(source.city),
+    city:
+      typeof source.city === "object" && source.city !== null
+        ? toNullableString((source.city as PrimitiveRecord)["name"])
+        : toNullableString(source.city),
     isActive,
     createdAt: toString(source.createdAt ?? source.created_at),
     updatedAt: toString(source.updatedAt ?? source.updated_at),
   };
 }
 
-function extractLoginIdentity(payload: LoginResponse, fallback?: Partial<LoginIdentity>): LoginIdentity {
+function extractLoginIdentity(
+  payload: LoginResponse,
+  fallback?: Partial<LoginIdentity>,
+): LoginIdentity {
   const root = payload as PrimitiveRecord;
   const user = (root.user as PrimitiveRecord | undefined) ?? {};
-  const tokenIdentity = extractIdentityFromToken(payload.token ?? payload.access_token ?? payload.jwt ?? null);
+  const tokenIdentity = extractIdentityFromToken(
+    payload.token ?? payload.access_token ?? payload.jwt ?? null,
+  );
 
   const id =
     toNullableNumber(root.id) ??
@@ -392,17 +460,17 @@ function extractLoginIdentity(payload: LoginResponse, fallback?: Partial<LoginId
     null;
 
   const email =
-    toString(root.email, '') ||
-    toString(user.email, '') ||
-    toString(tokenIdentity.email, '') ||
-    toString(fallback?.email, '');
+    toString(root.email, "") ||
+    toString(user.email, "") ||
+    toString(tokenIdentity.email, "") ||
+    toString(fallback?.email, "");
 
   const username =
-    toString(root.username, '') ||
-    toString(user.username, '') ||
-    toString(user.userName, '') ||
-    toString(tokenIdentity.username, '') ||
-    toString(fallback?.username, '');
+    toString(root.username, "") ||
+    toString(user.username, "") ||
+    toString(user.userName, "") ||
+    toString(tokenIdentity.username, "") ||
+    toString(fallback?.username, "");
 
   return { id, email, username };
 }
@@ -424,7 +492,9 @@ async function requestWithFallback<T>(paths: string[]): Promise<T> {
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error('Resource not found');
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Resource not found");
 }
 
 async function requestCollectionWithFallback<T>(paths: string[]): Promise<T[]> {
@@ -437,19 +507,23 @@ export function setAuthToken(token: string | null) {
 }
 
 /** Upload multipart/form-data — ne force pas Content-Type pour que fetch pose la boundary */
-export async function requestMultipart<T>(path: string, formData: FormData, method = 'POST'): Promise<T> {
+export async function requestMultipart<T>(
+  path: string,
+  formData: FormData,
+  method = "POST",
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(buildUrl(path), {
       method,
       headers: {
-        Accept: 'application/json',
+        Accept: "application/json",
         ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
       },
       body: formData,
     });
   } catch {
-    const apiUrl = API_BASE_URL.replace(/\/$/, '');
+    const apiUrl = API_BASE_URL.replace(/\/$/, "");
     throw new Error(`Impossible de joindre l'API (${apiUrl}).`);
   }
 
@@ -461,7 +535,7 @@ export async function requestMultipart<T>(path: string, formData: FormData, meth
       (parsed as ApiErrorPayload | null)?.message ??
       (parsed as ApiErrorPayload | null)?.error ??
       (parsed as ApiErrorPayload | null)?.detail ??
-      (parsed as ApiErrorPayload | null)?.['hydra:description'] ??
+      (parsed as ApiErrorPayload | null)?.["hydra:description"] ??
       `HTTP ${response.status}`;
     throw new ApiRequestError(message, response.status);
   }
@@ -475,18 +549,18 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(buildUrl(path), {
       headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
+        Accept: "application/json",
+        "Content-Type": "application/json",
         ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
         ...(init?.headers ?? {}),
       },
       ...init,
     });
   } catch {
-    const apiUrl = API_BASE_URL.replace(/\/$/, '');
-    const localhostHint = apiUrl.includes('localhost')
-      ? ' Sur un telephone reel, remplace localhost par l\'IP locale de ton Mac (ex: http://192.168.x.x:8080/api).'
-      : '';
+    const apiUrl = API_BASE_URL.replace(/\/$/, "");
+    const localhostHint = apiUrl.includes("localhost")
+      ? " Sur un telephone reel, remplace localhost par l'IP locale de ton Mac (ex: http://192.168.x.x:8080/api)."
+      : "";
     throw new Error(`Impossible de joindre l'API (${apiUrl}).${localhostHint}`);
   }
 
@@ -498,7 +572,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       (parsed as ApiErrorPayload | null)?.message ??
       (parsed as ApiErrorPayload | null)?.error ??
       (parsed as ApiErrorPayload | null)?.detail ??
-      (parsed as ApiErrorPayload | null)?.['hydra:description'] ??
+      (parsed as ApiErrorPayload | null)?.["hydra:description"] ??
       `HTTP ${response.status}`;
     throw new ApiRequestError(message, response.status);
   }
@@ -506,8 +580,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return unwrapData<T>(parsed);
 }
 
-async function loginWithFallback(payload: LoginPayload): Promise<LoginResponse> {
-  const fallbackPath = '/login';
+async function loginWithFallback(
+  payload: LoginPayload,
+): Promise<LoginResponse> {
+  const fallbackPath = "/login";
   const paths = Array.from(new Set([LOGIN_PATH, fallbackPath]));
   const loginPayload = { email: payload.email, password: payload.password };
 
@@ -516,7 +592,7 @@ async function loginWithFallback(payload: LoginPayload): Promise<LoginResponse> 
   for (const path of paths) {
     try {
       return await request<LoginResponse>(path, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify(loginPayload),
       });
     } catch (error) {
@@ -534,12 +610,12 @@ async function loginWithFallback(payload: LoginPayload): Promise<LoginResponse> 
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error('Login failed');
+  throw lastError instanceof Error ? lastError : new Error("Login failed");
 }
 
 export const lootopiaApi = {
   getCities: () =>
-    request<unknown>('/cities').then((payload) => {
+    request<unknown>("/cities").then((payload) => {
       const items = unwrapCollection<unknown>(payload);
       return items.map((raw) => {
         const source = (raw ?? {}) as PrimitiveRecord;
@@ -552,19 +628,23 @@ export const lootopiaApi = {
     }),
 
   searchCities: (q: string) =>
-    request<unknown>(`/cities/search?q=${encodeURIComponent(q)}`).then((payload) => {
-      const items = Array.isArray(payload) ? payload : unwrapCollection<unknown>(payload);
-      return (items as PrimitiveRecord[]).map((source) => ({
-        id: toNumber(source['id']),
-        name: toString(source['name']),
-        zipCode: toString(source['zipCode']),
-        iri: `/api/cities/${toNumber(source['id'])}`,
-      }));
-    }),
+    request<unknown>(`/cities/search?q=${encodeURIComponent(q)}`).then(
+      (payload) => {
+        const items = Array.isArray(payload)
+          ? payload
+          : unwrapCollection<unknown>(payload);
+        return (items as PrimitiveRecord[]).map((source) => ({
+          id: toNumber(source["id"]),
+          name: toString(source["name"]),
+          zipCode: toString(source["zipCode"]),
+          iri: `/api/cities/${toNumber(source["id"])}`,
+        }));
+      },
+    ),
 
   register: (payload: RegisterPayload) =>
-    request<PlayerProfile>('/users', {
-      method: 'POST',
+    request<PlayerProfile>("/users", {
+      method: "POST",
       body: JSON.stringify(payload),
     }),
 
@@ -574,42 +654,59 @@ export const lootopiaApi = {
 
   updateProfile: (userId: number, data: { username?: string; city?: string }) =>
     request<PlayerProfile>(`/users/${userId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/merge-patch+json' },
+      method: "PATCH",
+      headers: { "Content-Type": "application/merge-patch+json" },
       body: JSON.stringify(data),
     }),
 
-  uploadAvatar: async (userId: number, imageUri: string, mimeType: string, fileName: string) => {
+  uploadAvatar: async (
+    userId: number,
+    imageUri: string,
+    mimeType: string,
+    fileName: string,
+  ) => {
     const formData = new FormData();
 
     // Sur le web, il faut convertir l'URI en Blob/File
-    if (Platform.OS === 'web') {
+    if (Platform.OS === "web") {
       const resp = await fetch(imageUri);
       const blob = await resp.blob();
       // File est disponible dans les environnements web
       const file = new File([blob], fileName, { type: mimeType });
-      formData.append('avatar', file as unknown as Blob);
+      formData.append("avatar", file as unknown as Blob);
     } else {
       // React Native / Expo mobile: forme attendue par fetch RN
-      formData.append('avatar', { uri: imageUri, type: mimeType, name: fileName } as unknown as Blob);
+      formData.append("avatar", {
+        uri: imageUri,
+        type: mimeType,
+        name: fileName,
+      } as unknown as Blob);
     }
 
-    return requestMultipart<{ avatarUrl: string }>(`/users/${userId}/avatar`, formData);
+    return requestMultipart<{ avatarUrl: string }>(
+      `/users/${userId}/avatar`,
+      formData,
+    );
   },
 
   deleteAvatar: (userId: number) =>
-    request<void>(`/users/${userId}/avatar`, { method: 'DELETE' }),
+    request<void>(`/users/${userId}/avatar`, { method: "DELETE" }),
 
   getCurrentUser: () => {
     const identity = extractIdentityFromToken(bearerToken);
     if (!identity.id) {
-      throw new Error("Profil indisponible sans userId. Reconnecte-toi pour regenerer une session complete.");
+      throw new Error(
+        "Profil indisponible sans userId. Reconnecte-toi pour regenerer une session complete.",
+      );
     }
 
     return request<PlayerProfile>(`/users/${identity.id}`);
   },
 
-  getAchievements: () => request<unknown>('/achievements').then((payload) => unwrapCollection<Achievement>(payload)),
+  getAchievements: () =>
+    request<unknown>("/achievements").then((payload) =>
+      unwrapCollection<Achievement>(payload),
+    ),
 
   // getHunts: () =>
   //   request<unknown>('/hunts').then((payload) =>
@@ -617,23 +714,23 @@ export const lootopiaApi = {
   //   ),
 
   getHunts: () =>
-  request<unknown>('/hunts').then((payload) =>
-    unwrapCollection<unknown>(payload).map(normalizeHunt)
-  ),
+    request<unknown>("/hunts").then((payload) =>
+      unwrapCollection<unknown>(payload).map(normalizeHunt),
+    ),
 
   // getHunt: (huntId: number) =>
   //   request<unknown>(`/hunts/${huntId}`).then(normalizeHunt),
 
   getHunt: (huntId: number) =>
-  request<unknown>(`/hunts/${huntId}`).then((payload) => {
-    console.log('HUNT API =', payload);
-    return normalizeHunt(payload);
-  }),
+    request<unknown>(`/hunts/${huntId}`).then((payload) => {
+      console.log("HUNT API =", payload);
+      return normalizeHunt(payload);
+    }),
 
   getHuntSteps: async (huntId: number): Promise<Step[]> => {
     try {
       const payload = await request<unknown>(
-        `/steps?hunt=/api/hunts/${huntId}&itemsPerPage=200`
+        `/steps?hunt=/api/hunts/${huntId}&itemsPerPage=200`,
       );
 
       const items = unwrapCollection<unknown>(payload)
@@ -648,7 +745,7 @@ export const lootopiaApi = {
       // filtre non supporté → fallback
     }
 
-    const fallbackPayload = await request<unknown>('/steps?itemsPerPage=200');
+    const fallbackPayload = await request<unknown>("/steps?itemsPerPage=200");
 
     return unwrapCollection<unknown>(fallbackPayload)
       .map((s, i) => normalizeStep(s, i))
@@ -657,59 +754,94 @@ export const lootopiaApi = {
   },
 
   getAchievementsForUser: (userId: number) =>
-    request<unknown>(`/users/${userId}/achievements`).then((payload) => unwrapCollection<Achievement>(payload)),
+    request<unknown>(`/users/${userId}/achievements`).then((payload) =>
+      unwrapCollection<Achievement>(payload),
+    ),
 
   // getAchievementsForCurrentUser: () => requestCollectionWithFallback<Achievement>(['/achievements']),
   getAchievementsForCurrentUser: () => {
-  const identity = extractIdentityFromToken(bearerToken);
+    const identity = extractIdentityFromToken(bearerToken);
 
-  if (!identity.id) {
-    throw new Error("Impossible de charger tes achievements sans userId.");
-  }
+    if (!identity.id) {
+      throw new Error("Impossible de charger tes achievements sans userId.");
+    }
 
-  return request<unknown>(`/users/${identity.id}/achievements`)
-    .then((payload) => unwrapCollection<Achievement>(payload));
-},
+    return request<unknown>(`/users/${identity.id}/achievements`).then(
+      (payload) => unwrapCollection<Achievement>(payload),
+    );
+  },
 
-  getLeaderboardGlobal: () => request<unknown>('/leaderboard/global').then((payload) => normalizeLeaderboard(payload)),
+  getLeaderboardGlobal: () =>
+    request<unknown>("/leaderboard/global").then((payload) =>
+      normalizeLeaderboard(payload),
+    ),
 
-  getLeaderboardWeekly: () => request<unknown>('/leaderboard/weekly').then((payload) => normalizeLeaderboard(payload)),
+  getLeaderboardWeekly: () =>
+    request<unknown>("/leaderboard/weekly").then((payload) =>
+      normalizeLeaderboard(payload),
+    ),
 
-  getLeaderboardMonthly: () => request<unknown>('/leaderboard/monthly').then((payload) => normalizeLeaderboard(payload)),
+  getLeaderboardMonthly: () =>
+    request<unknown>("/leaderboard/monthly").then((payload) =>
+      normalizeLeaderboard(payload),
+    ),
 
-  getLeaderboardByHunts: () => request<unknown>('/leaderboard/by-hunts').then((payload) => normalizeLeaderboard(payload)),
+  getLeaderboardByHunts: () =>
+    request<unknown>("/leaderboard/by-hunts").then((payload) =>
+      normalizeLeaderboard(payload),
+    ),
 
-  getLeaderboardByStreak: () => request<unknown>('/leaderboard/by-streak').then((payload) => normalizeLeaderboard(payload)),
+  getLeaderboardByStreak: () =>
+    request<unknown>("/leaderboard/by-streak").then((payload) =>
+      normalizeLeaderboard(payload),
+    ),
 
   getLeaderboardWeeklyStars: () =>
-    request<unknown>('/leaderboard/weekly-stars').then((payload) => normalizeLeaderboard(payload)),
+    request<unknown>("/leaderboard/weekly-stars").then((payload) =>
+      normalizeLeaderboard(payload),
+    ),
 
   getLeaderboardLocal: (city: string) =>
-    request<unknown>(`/leaderboard/local/${encodeURIComponent(city)}`).then((payload) => normalizeLeaderboard(payload)),
+    request<unknown>(`/leaderboard/local/${encodeURIComponent(city)}`).then(
+      (payload) => normalizeLeaderboard(payload),
+    ),
 
-  getLeaderboardStats: () => request<unknown>('/leaderboard/stats').then((payload) => normalizeLeaderboardStats(payload)),
+  getLeaderboardStats: () =>
+    request<unknown>("/leaderboard/stats").then((payload) =>
+      normalizeLeaderboardStats(payload),
+    ),
 
   getHuntReviews: (huntId: number) =>
-    request<unknown>(`/hunts/${huntId}/reviews`).then((payload) => unwrapCollection<unknown>(payload).map(normalizeReview)),
+    request<unknown>(`/hunts/${huntId}/reviews`).then((payload) =>
+      unwrapCollection<unknown>(payload).map(normalizeReview),
+    ),
 
-  postHuntReview: (huntId: number, payload: { userId: number; rating: number; comment: string , huntCompletedAt?: string;}) =>
+  postHuntReview: (
+    huntId: number,
+    payload: {
+      userId: number;
+      rating: number;
+      comment: string;
+      huntCompletedAt?: string;
+    },
+  ) =>
     request<HuntReview>(`/hunts/${huntId}/reviews`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(payload),
     }),
-    
+
   completeStep: async (userId: number, stepId: number, pointsEarned = 0) => {
     const participations = await lootopiaApi.getMyParticipations(userId);
     const existing = participations.find(
-      (participation) => parseStepIriToId(participation.step) === stepId
+      (participation) => parseStepIriToId(participation.step) === stepId,
     );
 
     if (existing) {
       return existing;
     }
 
-    return request<Participation>('/participations', {
-      method: 'POST',
+    return request<Participation>("/participations", {
+      method: "POST",
       body: JSON.stringify({
         user: `/api/users/${userId}`,
         step: `/api/steps/${stepId}`,
@@ -719,43 +851,54 @@ export const lootopiaApi = {
   },
 
   getHuntReviewStats: (huntId: number) =>
-    request<unknown>(`/hunts/${huntId}/reviews/stats`).then((payload) => normalizeReviewStats(payload)),
-
-  getHuntHistory: (userId: number, limit = 100) =>
-    request<unknown>(`/users/${userId}/hunt-history?limit=${limit}`).then((payload) => {
-      const raw = (payload ?? {}) as Record<string, unknown>;
-      const items = Array.isArray(raw['data']) ? (raw['data'] as unknown[]) : unwrapCollection<unknown>(payload);
-      return items.map((entry) => {
-        const e = (entry ?? {}) as Record<string, unknown>;
-        const hunt = (e['hunt'] ?? {}) as Record<string, unknown>;
-        const city = hunt['city'] ? (hunt['city'] as Record<string, unknown>) : null;
-        return {
-          hunt: {
-            id: toNumber(hunt['id']),
-            title: toString(hunt['title']),
-            description: toNullableString(hunt['description']),
-            isActive: hunt['isActive'] === true,
-            city: city ? { id: toNumber(city['id']), name: toString(city['name']) } : null,
-          },
-          status: toString(e['status']) as 'completed' | 'in_progress',
-          stepsCompleted: toNumber(e['stepsCompleted']),
-          totalSteps: toNumber(e['totalSteps']),
-          progress: typeof e['progress'] === 'number' ? e['progress'] : 0,
-          totalPoints: toNumber(e['totalPoints']),
-          startedAt: toString(e['startedAt']),
-          lastActivityAt: toString(e['lastActivityAt']),
-          completedAt: toNullableString(e['completedAt']),
-          durationSeconds: toNullableNumber(e['durationSeconds']),
-        } satisfies HuntHistoryEntry;
-      });
-    }),
-
-  getAllSteps: (): Promise<Step[]> =>
-    request<unknown>('/steps?itemsPerPage=500').then((payload) =>
-      unwrapCollection<unknown>(payload).map((s, i) => normalizeStep(s, i))
+    request<unknown>(`/hunts/${huntId}/reviews/stats`).then((payload) =>
+      normalizeReviewStats(payload),
     ),
 
-  getMyRank: () => request<UserRank>('/leaderboard/my-rank'),
+  getHuntHistory: (userId: number, limit = 100) =>
+    request<unknown>(`/users/${userId}/hunt-history?limit=${limit}`).then(
+      (payload) => {
+        const raw = (payload ?? {}) as Record<string, unknown>;
+        const items = Array.isArray(raw["data"])
+          ? (raw["data"] as unknown[])
+          : unwrapCollection<unknown>(payload);
+        return items.map((entry) => {
+          const e = (entry ?? {}) as Record<string, unknown>;
+          const hunt = (e["hunt"] ?? {}) as Record<string, unknown>;
+          const city = hunt["city"]
+            ? (hunt["city"] as Record<string, unknown>)
+            : null;
+          return {
+            hunt: {
+              id: toNumber(hunt["id"]),
+              title: toString(hunt["title"]),
+              description: toNullableString(hunt["description"]),
+              isActive: hunt["isActive"] === true,
+              city: city
+                ? { id: toNumber(city["id"]), name: toString(city["name"]) }
+                : null,
+            },
+            status: toString(e["status"]) as "completed" | "in_progress",
+            stepsCompleted: toNumber(e["stepsCompleted"]),
+            totalSteps: toNumber(e["totalSteps"]),
+            progress: typeof e["progress"] === "number" ? e["progress"] : 0,
+            totalPoints: toNumber(e["totalPoints"]),
+            startedAt: toString(e["startedAt"]),
+            lastActivityAt: toString(e["lastActivityAt"]),
+            completedAt: toNullableString(e["completedAt"]),
+            durationSeconds: toNullableNumber(e["durationSeconds"]),
+          } satisfies HuntHistoryEntry;
+        });
+      },
+    ),
+
+  getAllSteps: (): Promise<Step[]> =>
+    request<unknown>("/steps?itemsPerPage=500").then((payload) =>
+      unwrapCollection<unknown>(payload).map((s, i) => normalizeStep(s, i)),
+    ),
+
+  getMyRank: () =>
+    request<unknown>("/leaderboard/my-rank").then(normalizeUserRank),
 
   /**
    * Récupère le rang d'un utilisateur spécifique.
@@ -768,46 +911,45 @@ export const lootopiaApi = {
    * Endpoint: GET /participations?user=/api/users/{id}
    * Chaque participation contient l'IRI de l'étape et la date de complétion.
    */
- getMyParticipations: async (userId: number): Promise<Participation[]> => {
-  const keepOnlyCurrentUser = (
-    participations: Participation[]
-  ) =>
-    participations.filter((participation) => {
-      const user = participation.user;
+  getMyParticipations: async (userId: number): Promise<Participation[]> => {
+    const keepOnlyCurrentUser = (participations: Participation[]) =>
+      participations.filter((participation) => {
+        const user = participation.user;
 
-      if (typeof user !== 'string') {
-        return false;
-      }
+        if (typeof user !== "string") {
+          return false;
+        }
 
-      return (
-        user === `/api/users/${userId}` ||
-        user.endsWith(`/${userId}`)
+        return user === `/api/users/${userId}` || user.endsWith(`/${userId}`);
+      });
+
+    try {
+      const payload = await request<unknown>(
+        `/participations?user=/api/users/${userId}&itemsPerPage=200`,
       );
-    });
 
-  try {
-    const payload = await request<unknown>(
-      `/participations?user=/api/users/${userId}&itemsPerPage=200`
-    );
+      const items = unwrapCollection<Participation>(payload);
 
-    const items = unwrapCollection<Participation>(payload);
+      return keepOnlyCurrentUser(items);
+    } catch {
+      const fallbackPayload = await request<unknown>(
+        "/participations?itemsPerPage=200",
+      );
 
-    return keepOnlyCurrentUser(items);
-  } catch {
-    const fallbackPayload = await request<unknown>(
-      '/participations?itemsPerPage=200'
-    );
-
-    return keepOnlyCurrentUser(
-      unwrapCollection<Participation>(fallbackPayload)
-    );
-  }
-},
+      return keepOnlyCurrentUser(
+        unwrapCollection<Participation>(fallbackPayload),
+      );
+    }
+  },
 };
 
 export function createSessionFromLogin(
   login: LoginResponse,
-  fallbackIdentity?: Partial<{ id: number | null; email: string; username: string }>
+  fallbackIdentity?: Partial<{
+    id: number | null;
+    email: string;
+    username: string;
+  }>,
 ): AuthSession {
   const identity = extractLoginIdentity(login, fallbackIdentity);
 
